@@ -50,3 +50,6 @@ android/.idea/
 
 # Local Device Measurement Outputs
 docs/device-measurements/
+
+# Local Distribution Binaries
+dist/

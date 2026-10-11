@@ -1,7 +1,7 @@
 name: svara
-description: A private offline music library with Audius discovery.
+description: A private offline music library with Audius and experimental YouTube discovery.
 publish_to: none
-version: 1.0.0+1
+version: 2.0.0+2000
 environment:
   sdk: '>=3.13.0 <4.0.0'
 dependencies:
@@ -15,13 +15,19 @@ dependencies:
   sqflite: ^2.4.4+1
   path: ^1.9.1
   path_provider: ^2.1.6
+  svara_youtube:
+    path: packages/svara_youtube
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   sqflite_common_ffi: ^2.4.3
 flutter:
   uses-material-design: true
+  assets:
+    - assets/licenses/
 
 # Desktop tests use the OS SQLite; Android runtime uses sqflite.
 hooks:

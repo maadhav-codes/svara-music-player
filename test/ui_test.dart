@@ -157,6 +157,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Private by design'), findsOneWidget);
       expect(tester.takeException(), null);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await handler.setQueue(
+          [
+            const Track(
+              id: 'youtube:aaaaaaaaaaa',
+              title: 'Test video',
+              artist: 'Test uploader',
+              uri: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+              durationMs: 90000,
+            ),
+          ],
+          position: const Duration(seconds: 42),
+          start: false,
+        );
+      });
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(MiniPlayer));
+      await tester.pumpAndSettle();
+      expect(find.text('STREAMING FROM YOUTUBE'), findsOneWidget);
+      expect(find.text('STREAMING FROM AUDIUS'), findsNothing);
+      expect(find.text('Open video in YouTube'), findsOneWidget);
+      expect(find.text('0:42'), findsOneWidget);
+      expect(tester.takeException(), null);
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() async {
         await handler.dispose();

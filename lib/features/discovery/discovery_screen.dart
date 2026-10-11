@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/media_source.dart';
 import '../../core/track.dart';
 import '../library/library_screen.dart';
 
@@ -22,6 +23,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   String? error;
   bool loading = false, more = true;
   int generation = 0;
+  MediaSource source = MediaSource.audius;
+  String? continuation;
   @override
   void initState() {
     super.initState();
@@ -42,6 +45,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       generation++;
       tracks.clear();
       more = true;
+      continuation = null;
     }
     final version = generation;
     token = CancelToken();
@@ -50,13 +54,28 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       error = null;
     });
     try {
-      final page = await ref
-          .read(audiusProvider)
-          .tracks(query: query, offset: tracks.length, cancel: token);
+      final List<Track> page;
+      String? nextContinuation;
+      bool hasMore;
+      if (source == MediaSource.youtube) {
+        final data = await ref
+            .read(youtubeProvider)
+            .search(query, continuation: continuation, cancel: token);
+        page = data.tracks;
+        nextContinuation = data.continuation;
+        hasMore = data.continuation != null;
+      } else {
+        page = await ref
+            .read(audiusProvider)
+            .tracks(query: query, offset: tracks.length, cancel: token);
+        hasMore = page.length == 30;
+      }
       if (mounted && generation == version) {
         setState(() {
-          tracks.addAll(page);
-          more = page.length == 30;
+          final ids = tracks.map((t) => t.id).toSet();
+          tracks.addAll(page.where((t) => ids.add(t.id)));
+          continuation = nextContinuation;
+          more = hasMore;
         });
       }
     } catch (e) {
@@ -71,6 +90,36 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   }
 
   Future<void> artist(Track t) async {
+    if (t.source == MediaSource.youtube) {
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.artist,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'YouTube uploader • Channel attribution may differ from the recording artist. This may be a cover, remix, or live performance.',
+                ),
+                TextButton(
+                  onPressed: () => openSource(t),
+                  child: const Text('Open video in YouTube'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     if (t.artistId == null) return;
     try {
       final data = await ref.read(audiusProvider).artist(t.artistId!);
@@ -110,6 +159,22 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     }
   }
 
+  Future<void> openSource(Track track) async {
+    try {
+      await ref.read(libraryRepositoryProvider).openUrl(track.sourceUrl);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A browser or YouTube app is needed to open this video.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => RefreshIndicator(
     onRefresh: () => load(reset: true),
@@ -128,29 +193,58 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Powered by Audius • Independent music, streamed online. Catalog availability varies.',
+                Text(
+                  source == MediaSource.audius
+                      ? 'Powered by Audius • Independent music, streamed online. Catalog availability varies.'
+                      : 'YouTube • Experimental source. Availability varies; extraction may stop working. Uploader names may differ from artists.',
+                ),
+                const SizedBox(height: 16),
+                SegmentedButton<MediaSource>(
+                  segments: const [
+                    ButtonSegment(
+                      value: MediaSource.audius,
+                      label: Text('Audius'),
+                    ),
+                    ButtonSegment(
+                      value: MediaSource.youtube,
+                      label: Text('YouTube'),
+                    ),
+                  ],
+                  selected: {source},
+                  onSelectionChanged: (value) {
+                    debounce?.cancel();
+                    source = value.single;
+                    unawaited(load(reset: true));
+                  },
                 ),
                 const SizedBox(height: 24),
                 TextField(
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     prefixIcon: Icon(Icons.search),
-                    hintText: 'Search Audius',
+                    hintText: 'Search ${source.label}',
                   ),
                   onChanged: (value) {
                     debounce?.cancel();
                     token?.cancel();
                     generation++;
                     query = value.trim();
+                    setState(() {
+                      loading = false;
+                      tracks.clear();
+                      error = null;
+                      more = false;
+                    });
                     debounce = Timer(
-                      const Duration(milliseconds: 400),
+                      const Duration(milliseconds: 350),
                       () => load(reset: true),
                     );
                   },
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  query.isEmpty ? 'Trending this week' : 'Search results',
+                  query.isEmpty && source == MediaSource.audius
+                      ? 'Trending this week'
+                      : 'Search results',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ],
@@ -176,7 +270,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => artist(t),
-                  child: const Text('About artist'),
+                  child: Text(
+                    t.source == MediaSource.youtube
+                        ? 'Uploader / Open video'
+                        : 'About artist',
+                  ),
                 ),
               ),
             ],
@@ -194,7 +292,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   child: const Text('Retry'),
                 ),
               if (!loading && error == null && tracks.isEmpty)
-                const Text('No tracks found. Try another search.'),
+                Text(
+                  source == MediaSource.youtube && query.isEmpty
+                      ? 'Search YouTube to find videos. Phone music remains available offline in Library.'
+                      : 'No tracks found. Try another search.',
+                ),
               if (more && !loading && error == null)
                 OutlinedButton(onPressed: load, child: const Text('Load more')),
             ],

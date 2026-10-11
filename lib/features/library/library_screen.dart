@@ -389,15 +389,17 @@ class SongTile extends ConsumerWidget {
     leading: TrackArt(track),
     title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: Text(
-      '${track.artist}${track.online ? ' • Audius' : ''}${track.streamable ? '' : ' • Restricted'}',
+      '${track.artist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     ),
     onTap: track.streamable
         ? onPlay
         : () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This track is restricted on Audius.'),
+            SnackBar(
+              content: Text(
+                'This track is unavailable on ${track.source.label}.',
+              ),
             ),
           ),
     trailing: PopupMenuButton<String>(

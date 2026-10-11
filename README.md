@@ -1,6 +1,6 @@
 # Svara 🎵
 
-> **A minimal, private offline music library with Audius online discovery.**  
+> **A minimal, private offline music library with Audius and experimental YouTube discovery.**
 > No ads • No accounts • No tracking • No subscriptions • 100% Free & Open Source
 
 ---
@@ -9,7 +9,7 @@
 
 **Svara** (Sanskrit: _स्वर_, meaning _musical note_ or _voice_) is a lightweight, modern Android music player built with **Flutter & Material 3**.
 
-It is designed for listeners who value **privacy, speed, and clean design**. Svara plays the music stored on your device and connects to **Audius** to let you explore fresh, streamable independent music—all without telemetry, accounts, or battery drain.
+It is designed for listeners who value **privacy, speed, and clean design**. Svara plays the music stored on your device and connects to **Audius** to let you explore fresh, streamable independent music—without telemetry or mandatory accounts. Online requests still reach the selected provider.
 
 |                                **Library View**                                 |                                **Now Playing**                                |
 | :-----------------------------------------------------------------------------: | :---------------------------------------------------------------------------: |
@@ -22,7 +22,7 @@ It is designed for listeners who value **privacy, speed, and clean design**. Sva
 ### 🎧 For Listeners
 
 - **📱 Phone-Storage Library**: Automatically catalogs local audio files (MP3, AAC/M4A, FLAC, WAV, OGG) via native Android MediaStore.
-- **🌐 Discover Independent Music**: Stream trending and searched independent tracks legally through the Audius catalog.
+- **🌐 Discover Independent Music**: Stream publicly accessible trending and searched tracks through the Audius catalog.
 - **🎨 Dynamic Material 3 Design**: Adapts its color palette in real time to match the artwork of the currently playing track. Full support for Dark & Light modes.
 - **⚡ Quick Mix**: A smart one-tap mix that weaves your favorites with songs you haven’t listened to recently.
 - **📂 Flexible Browsing**: Seamlessly filter and browse your library by Songs, Albums, Artists, or Folders.
@@ -81,8 +81,8 @@ lib/
 │   └── track.dart              # Universal Track model & queue algorithms
 ├── features/
 │   ├── library/                # MediaStore repository, pagination, and local library UI
-│   ├── discovery/              # Audius REST API repository and discovery screen
-│   ├── player/                 # Shared audio engine (just_audio + audio_service)
+│   ├── discovery/              # Audius REST API, YouTube bridge repository, source selector
+│   ├── player/                 # Logical queue, source resolver, shared audio engine
 │   ├── playlists/              # On-device playlist repository and management UI
 │   └── settings/               # Themes, privacy overview, and terms of service links
 ├── main.dart                   # Service initialization & provider registration
@@ -100,11 +100,11 @@ lib/
 
 ## 🧪 Verification & Testing
 
-Every commit and change is statically analyzed and tested:
+Run the deterministic checks before releasing:
 
 ```sh
 # 1. Format check
-dart format --output=none --set-exit-if-changed lib test
+dart format --output=none --set-exit-if-changed lib test integration_test packages/svara_youtube/lib
 
 # 2. Static analysis
 flutter analyze
@@ -112,8 +112,6 @@ flutter analyze
 # 3. Unit & Widget tests
 flutter test
 ```
-
-For hardware measurement guidelines and benchmarks, see [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ---
 
@@ -140,12 +138,42 @@ Outputs are located in:
 ## 🛡️ Privacy & Compliance
 
 - **Scoped Storage**: Svara only requests `READ_MEDIA_AUDIO` (Android 13+) or `READ_EXTERNAL_STORAGE` (Android 12 and below). It never asks for contacts, cameras, microphones, or unrestricted storage access.
-- **Audius API Terms Compliance**: Online tracks are streamed directly via legal public endpoints. Online songs and audio are **never downloaded or cached to disk**. Audius metadata and artwork are kept strictly in volatile session memory.
+- **Online storage**: Audius uses public REST endpoints; YouTube uses unofficial extraction. Online songs and audio are **never downloaded or cached to disk**. Audius metadata and artwork are kept strictly in volatile session memory.
 - **No Cloud Backup**: `android:allowBackup="false"` is enforced to protect your personal listening habits from being uploaded to cloud backups.
 
 ---
 
 ## 📄 License & Attribution
 
-- Released under the open-source MIT License.
+- Released under **GPL-3.0-or-later**, including the bundled NewPipeExtractor integration. See [LICENSE](LICENSE) and [native notices](assets/licenses/NOTICE.txt).
 - Music streamed through the Discover tab is provided by [Audius](https://audius.co) under the [Open Music License](https://audius.org/open-music-license.pdf).
+
+## Experimental YouTube integration
+
+Discover has an Audius / YouTube selector. YouTube search is debounced and paginated; results identify the uploader and offer a canonical YouTube link. Settings can disable this source and select Data saver, Standard, or High audio quality. Disabling YouTube stops active YouTube playback while preserving the queue.
+
+The local Flutter plugin at `packages/svara_youtube` registers on every engine, including the background service engine. It pins **NewPipeExtractor v0.26.5**, **OkHttp 4.12.0**, and **desugar_jdk_libs_nio 2.1.5**. Gradle needs internet access to Maven repositories and JitPack. No YouTube API key, private credentials, Python, Deno, or hosting server is required by this implementation. Network/parser work runs on two native workers with a bounded queue and cancellation/deadlines; transient requests retry at most twice.
+
+`Track.source` distinguishes local, Audius, and YouTube references. Existing local/Audius records are read without changing their IDs. One audio player receives only the current resolved stream. The handler owns shuffle, repeat, navigation, and queue edits. Each online selection is resolved at playback time; signed URLs and headers are never persisted. YouTube titles/uploader labels from user-selected queues and playlists are saved for identification, with current metadata refreshed on playback. Audius saved records retain reference-only placeholders. Search/artwork caches remain bounded and session-only.
+
+On a playback failure, the handler tries one fresh resolution (an alternative supported format for YouTube) before pausing with the queue and position preserved. Restricted, account-required, removed, or unsupported videos produce useful messages. Live videos and non-progressive/unsupported delivery formats are currently excluded. Gapless transitions across the logical queue are not guaranteed; there is no next-track extraction prefetch or persistent audio download/cache.
+
+YouTube extraction is **unofficial and experimental**. It can break when YouTube changes and does not guarantee all mainstream music. Personal use and GitHub distribution do not waive [YouTube terms](https://www.youtube.com/static?template=terms). An official visible-player integration has different restrictions and does not provide an authorized raw-audio/background replacement. Software licenses do not grant recording rights.
+
+### Live Android smoke test
+
+Use a dedicated test device or back up Svara data first. Flutter's installer may uninstall an existing application when its version/signature conflicts. Check the installed build number and use a higher `--build-number` where required; do not allow uninstall on a device with data you need.
+
+```sh
+flutter test integration_test/youtube_device_test.dart -d DEVICE_ID
+# Optional longer window for a manual HOME/background check:
+flutter test integration_test/youtube_device_test.dart -d DEVICE_ID --dart-define=BACKGROUND_SECONDS=15
+```
+
+The live test uses Blender's Big Buck Bunny, plays muted, checks search/pagination, audio decoding, seeking, queue serialization, and progression. It is excluded from normal unit-test CI. For background verification, send HOME during `BACKGROUND_READY`, then check that the test completes. Afterward rebuild/install the regular app: the test APK is a harness, not the normal UI.
+
+### Updating and distributing
+
+Pin a reviewed extractor release in `packages/svara_youtube/android/build.gradle`, update notices, and rerun unit tests, the live device check, and a minified release build. The app uses the existing legacy Kotlin Gradle compatibility flags; Flutter warns these will need migration in a future SDK update. Consumer R8 rules retain Rhino classes; minimum API 24 requires NIO core-library desugaring in both app and plugin.
+
+Release APKs are currently **development-signed**, even in release mode. Configure a production signing key before public distribution, preserve that key for upgrades, and publish corresponding app/plugin source, build instructions, and third-party notices alongside your APK. Do not publish cookies, signing keys, signed stream URLs, or music files. Keep local playback usable when extraction is unavailable.

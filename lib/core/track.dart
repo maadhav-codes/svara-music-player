@@ -1,3 +1,7 @@
+// Preserve the public constructor used by legacy local/Audius repositories.
+// ignore_for_file: prefer_initializing_formals
+import 'media_source.dart';
+
 class Track {
   const Track({
     required this.id,
@@ -9,14 +13,31 @@ class Track {
     this.durationMs = 0,
     this.artwork,
     this.artistId,
-    this.online = false,
+    bool online = false,
+    MediaSource? source,
     this.streamable = true,
     this.modified = 0,
-  });
+  }) : _online = online,
+       _source = source;
   final String id, title, artist, uri, album, folder;
   final String? artwork, artistId;
   final int durationMs, modified;
-  final bool online, streamable;
+  final bool _online, streamable;
+  final MediaSource? _source;
+  MediaSource get source =>
+      _source ??
+      (id.startsWith('youtube:')
+          ? MediaSource.youtube
+          : _online || id.startsWith('audius:')
+          ? MediaSource.audius
+          : MediaSource.local);
+  bool get online => source != MediaSource.local;
+  String get providerId => id.substring(id.indexOf(':') + 1);
+  String get sourceUrl => switch (source) {
+    MediaSource.youtube => 'https://www.youtube.com/watch?v=$providerId',
+    MediaSource.audius => 'https://audius.co',
+    MediaSource.local => uri,
+  };
   Map<String, Object?> toJson() => {
     'id': id,
     'title': title,
@@ -28,17 +49,23 @@ class Track {
     'artwork': artwork,
     'artistId': artistId,
     'online': online,
+    'source': source.name,
     'streamable': streamable,
     'modified': modified,
   };
-  // Saved Audius selections contain a reference, never cached provider metadata.
+  // Online selections persist identifiers, never signed URLs or API credentials.
+  // Audius metadata must remain session-only; use placeholders until resolved.
   Map<String, Object?> toSavedJson() => online
       ? {
           'id': id,
-          'title': 'Audius track',
-          'artist': 'Audius',
-          'uri': uri,
+          'title': source == MediaSource.youtube
+              ? title
+              : '${source.label} track',
+          'artist': source == MediaSource.youtube ? artist : source.label,
+          if (source == MediaSource.youtube) 'durationMs': durationMs,
+          'uri': sourceUrl,
           'online': true,
+          'source': source.name,
           'streamable': true,
         }
       : toJson();
@@ -54,6 +81,7 @@ class Track {
     artwork: j['artwork'] as String?,
     artistId: j['artistId'] as String?,
     online: j['online'] == true,
+    source: MediaSource.values.where((s) => s.name == j['source']).firstOrNull,
     streamable: j['streamable'] != false,
   );
 }

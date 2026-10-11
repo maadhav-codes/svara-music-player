@@ -3,22 +3,16 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
 
 import '../../core/providers.dart';
 import '../../core/track.dart';
+import '../../core/media_source.dart';
 import '../../core/artwork.dart';
 import 'svara_handler.dart';
 
 String timeLabel(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
-Track? active(SvaraHandler h) {
-  final id = h.mediaItem.value?.id;
-  for (final t in h.tracks) {
-    if (t.id == id) return t;
-  }
-  return null;
-}
+Track? active(SvaraHandler h) => h.current;
 
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({super.key});
@@ -82,13 +76,13 @@ class PlayButton extends StatelessWidget {
   final SvaraHandler handler;
   final bool large;
   @override
-  Widget build(BuildContext context) => StreamBuilder<PlayerState>(
-    stream: handler.player.playerStateStream,
+  Widget build(BuildContext context) => StreamBuilder<PlaybackState>(
+    stream: handler.playbackState,
     builder: (_, snapshot) {
       final playing = snapshot.data?.playing ?? false;
       final loading =
-          snapshot.data?.processingState == ProcessingState.loading ||
-          snapshot.data?.processingState == ProcessingState.buffering;
+          snapshot.data?.processingState == AudioProcessingState.loading ||
+          snapshot.data?.processingState == AudioProcessingState.buffering;
       return IconButton.filled(
         tooltip: playing ? 'Pause' : 'Play',
         iconSize: large ? 44 : 28,
@@ -115,8 +109,11 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   ColorScheme? accent;
   String? artId;
+  String artworkKey(Track t) =>
+      '${t.id}:${t.artwork}:${Theme.of(context).brightness.name}';
   Future<void> derive(Track t) async {
-    artId = t.id;
+    final key = artworkKey(t);
+    artId = key;
     accent = null;
     final bytes = await ArtworkCache.load(t, ref);
     if (bytes == null || !mounted) return;
@@ -124,7 +121,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       provider: MemoryImage(bytes),
       brightness: Theme.of(context).brightness,
     );
-    if (mounted && artId == t.id) setState(() => accent = scheme);
+    if (mounted && artId == key) setState(() => accent = scheme);
   }
 
   @override
@@ -134,7 +131,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       stream: h.mediaItem,
       builder: (_, snapshot) {
         final t = active(h);
-        if (t != null && artId != t.id) unawaited(derive(t));
+        if (t != null && artId != artworkKey(t)) unawaited(derive(t));
         return Theme(
           data: Theme.of(context)
               .copyWith(colorScheme: accent ?? Theme.of(context).colorScheme),
@@ -214,8 +211,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                     Duration(milliseconds: t.durationMs);
                                 final progress = duration.inMilliseconds <= 0
                                     ? 0.0
-                                    : ((pos.data ?? Duration.zero)
-                                                  .inMilliseconds /
+                                    : ((h.position).inMilliseconds /
                                               duration.inMilliseconds)
                                           .clamp(0.0, 1.0);
                                 final size =
@@ -262,15 +258,38 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             if (t.online)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
                                 child: Text(
-                                  'STREAMING FROM AUDIUS',
-                                  style: TextStyle(
+                                  'STREAMING FROM ${t.source.label.toUpperCase()}',
+                                  style: const TextStyle(
                                     fontSize: 11,
                                     letterSpacing: 2,
                                   ),
                                 ),
+                              ),
+                            if (t.source == MediaSource.youtube)
+                              TextButton.icon(
+                                icon: const Icon(Icons.open_in_new, size: 18),
+                                label: const Text('Open video in YouTube'),
+                                onPressed: () async {
+                                  try {
+                                    await ref
+                                        .read(libraryRepositoryProvider)
+                                        .openUrl(t.sourceUrl);
+                                  } catch (_) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'A browser or YouTube app is needed to open this video.',
+                                              ),
+                                            ),
+                                          );
+                                    }
+                                  }
+                                },
                               ),
                             IconButton(
                               tooltip:
@@ -297,11 +316,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                           Duration(milliseconds: t.durationMs);
                                       final ms = duration.inMilliseconds
                                           .toDouble();
-                                      final position =
-                                          (pos.data ?? Duration.zero)
-                                              .inMilliseconds
-                                              .toDouble()
-                                              .clamp(0.0, ms > 0 ? ms : 1.0);
+                                      final position = (h.position)
+                                          .inMilliseconds
+                                          .toDouble()
+                                          .clamp(0.0, ms > 0 ? ms : 1.0);
                                       return Column(
                                         children: [
                                           Slider(
@@ -326,11 +344,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                             mainAxisAlignment:
                                                 MainAxisAlignment.spaceBetween,
                                             children: [
-                                              Text(
-                                                timeLabel(
-                                                  pos.data ?? Duration.zero,
-                                                ),
-                                              ),
+                                              Text(timeLabel(h.position)),
                                               Text(timeLabel(duration)),
                                             ],
                                           ),
@@ -348,9 +362,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                 children: [
                                   IconButton(
                                     tooltip: 'Shuffle',
-                                    isSelected: h.player.shuffleModeEnabled,
+                                    isSelected: h.shuffleEnabled,
                                     onPressed: () => h.setShuffleMode(
-                                      h.player.shuffleModeEnabled
+                                      h.shuffleEnabled
                                           ? AudioServiceShuffleMode.none
                                           : AudioServiceShuffleMode.all,
                                     ),
@@ -372,22 +386,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                     icon: const Icon(Icons.skip_next_rounded),
                                   ),
                                   IconButton(
-                                    tooltip:
-                                        'Repeat: ${h.player.loopMode.name}',
+                                    tooltip: 'Repeat: ${h.repeatMode.name}',
                                     isSelected:
-                                        h.player.loopMode != LoopMode.off,
-                                    onPressed: () => h.setRepeatMode(
-                                      switch (h.player.loopMode) {
-                                        LoopMode.off =>
-                                          AudioServiceRepeatMode.all,
-                                        LoopMode.all =>
-                                          AudioServiceRepeatMode.one,
-                                        LoopMode.one =>
-                                          AudioServiceRepeatMode.none,
-                                      },
-                                    ),
+                                        h.repeatMode !=
+                                        AudioServiceRepeatMode.none,
+                                    onPressed: () =>
+                                        h.setRepeatMode(switch (h.repeatMode) {
+                                          AudioServiceRepeatMode.none =>
+                                            AudioServiceRepeatMode.all,
+                                          AudioServiceRepeatMode.all =>
+                                            AudioServiceRepeatMode.one,
+                                          AudioServiceRepeatMode.one =>
+                                            AudioServiceRepeatMode.none,
+                                          _ => AudioServiceRepeatMode.none,
+                                        }),
                                     icon: Icon(
-                                      h.player.loopMode == LoopMode.one
+                                      h.repeatMode == AudioServiceRepeatMode.one
                                           ? Icons.repeat_one
                                           : Icons.repeat,
                                     ),

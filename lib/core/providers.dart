@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'store.dart';
 import '../features/library/library_repository.dart';
 import '../features/discovery/audius_repository.dart';
+import '../features/discovery/youtube_repository.dart';
 import '../features/player/svara_handler.dart';
 
 final storeProvider = Provider<Store>((ref) => throw UnimplementedError());
@@ -15,6 +16,9 @@ final libraryRepositoryProvider = Provider(
 );
 final audiusProvider = Provider(
   (ref) => AudiusRepository(ref.watch(storeProvider)),
+);
+final youtubeProvider = Provider(
+  (ref) => YouTubeRepository(ref.watch(storeProvider)),
 );
 final themeProvider = NotifierProvider<ThemeController, ThemeMode>(
   ThemeController.new,

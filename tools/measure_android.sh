@@ -13,4 +13,4 @@ for attempt in 1 2 3 4 5; do
 done
 "$adb_bin" shell dumpsys meminfo app.svara > "$output_dir/app-memory.txt"
 "$adb_bin" shell dumpsys gfxinfo app.svara framestats > "$output_dir/android-frames.txt"
-printf 'Raw measurements saved in %s. Follow docs/VALIDATION.md for Flutter frame timing and playback checks.\n' "$output_dir"
+"$output_dir"

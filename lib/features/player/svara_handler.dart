@@ -1,40 +1,52 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:dio/dio.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../core/media_source.dart';
 import '../../core/store.dart';
 import '../../core/track.dart';
+import '../discovery/audius_repository.dart';
+import 'source_resolver.dart';
 
+/// Owns the durable logical queue. The engine receives only the selected source;
+/// queue indices are never inferred from the engine's single-source index.
 class SvaraHandler extends BaseAudioHandler with SeekHandler {
-  SvaraHandler(this.store, {AudioPlayer? audioPlayer, this.resolveOnline})
-    : player =
-          audioPlayer ??
-          AudioPlayer(useLazyPreparation: true, handleInterruptions: false) {
+  SvaraHandler(
+    this.store, {
+    AudioPlayer? audioPlayer,
+    this.resolve,
+    Random? random,
+  }) : player =
+           audioPlayer ??
+           AudioPlayer(
+             handleInterruptions: false,
+             useProxyForRequestHeaders: false,
+           ),
+       random = random ?? Random() {
+    _subscriptions.add(player.playbackEventStream.listen((_) => _broadcast()));
     _subscriptions.add(
-      player.playbackEventStream.listen(
-        (_) => _broadcast(),
-        onError: (Object e, StackTrace s) => _failure(e),
-      ),
+      player.errorStream.listen((e) => unawaited(_failure(e))),
     );
-    _subscriptions.add(player.errorStream.listen(_failure));
     _subscriptions.add(
-      player.currentIndexStream.listen((index) {
-        if (index != null && index < tracks.length) {
-          mediaItem.add(_item(tracks[index]));
-          if (tracks[index].online && tracks[index].title == 'Audius track') {
-            _background(_hydrate(index));
-          }
-          if (player.playing) _background(store.played(tracks[index].id));
-          _background(save());
+      player.processingStateStream.listen((state) {
+        _broadcast();
+        if (state == ProcessingState.completed &&
+            _loaded &&
+            _wantsPlay &&
+            !_completing) {
+          _completing = true;
+          unawaited(_complete().whenComplete(() => _completing = false));
         }
       }),
     );
     _subscriptions.add(
       player.playingStream.listen((playing) {
-        if (playing && current != null) _background(store.played(current!.id));
         _broadcast();
+        if (playing && current != null) _background(store.played(current!.id));
         _background(save());
       }),
     );
@@ -42,15 +54,42 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
       if (player.playing) _background(save());
     });
   }
+  final Store store;
+  final AudioPlayer player;
+  final ResolveTrack? resolve;
+  final Random random;
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _pending = <Future<void>>{};
+  final errors = StreamController<String>.broadcast();
+  List<Track> tracks = [];
+  List<int> _order = [];
+  int _index = 0, _loadGeneration = 0;
+  Duration _position = Duration.zero;
+  bool _initialized = false, _loaded = false, _loading = false;
+  bool _disposed = false,
+      _wantsPlay = false,
+      _completing = false,
+      _recovering = false;
+  bool _resumeAfterInterruption = false;
+  bool shuffleEnabled = false;
+  AudioServiceRepeatMode repeatMode = AudioServiceRepeatMode.none;
+  CancelToken? _cancel;
+  ResolvedStream? _stream;
+  int _automaticRetries = 0;
+  Timer? _persist, _sleep;
+  DateTime? sleepUntil;
+  int get activeIndex => _index;
+  Duration get position => _loaded ? player.position : _position;
+  Track? get current =>
+      tracks.isNotEmpty && _index < tracks.length ? tracks[_index] : null;
+
   void _background(Future<void> task) {
     late Future<void> tracked;
     tracked = task
         .catchError((Object e) {
           if (!errors.isClosed) {
             errors.add(
-              'Could not save playback data. Please check available device storage.',
+              'Could not save playback data. Check available device storage.',
             );
           }
         })
@@ -58,22 +97,6 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
     _pending.add(tracked);
   }
 
-  final Future<Track> Function(Track)? resolveOnline;
-  final Store store;
-  final AudioPlayer player;
-  bool _initialized = false;
-  int _loadGeneration = 0;
-  int get activeIndex => _loaded ? player.currentIndex ?? 0 : _restoredIndex;
-  Duration get position => _loaded ? player.position : _restoredPosition;
-  List<Track> tracks = [];
-  final errors = StreamController<String>.broadcast();
-  Timer? _persist, _sleep;
-  DateTime? sleepUntil;
-  bool _resumeAfterInterruption = false;
-  Track? get current =>
-      player.currentIndex != null && player.currentIndex! < tracks.length
-      ? tracks[player.currentIndex!]
-      : null;
   Future<void> initialize() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
@@ -86,11 +109,11 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
     _subscriptions.add(
       session.interruptionEventStream.listen((event) {
         if (event.begin) {
-          _resumeAfterInterruption = player.playing;
+          _resumeAfterInterruption = _wantsPlay;
           if (event.type == AudioInterruptionType.duck) {
             unawaited(player.setVolume(.25));
           } else {
-            unawaited(pause());
+            unawaited(_pauseEngine());
           }
         } else {
           unawaited(player.setVolume(1));
@@ -111,135 +134,246 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
       tracks = (saved['tracks'] as List)
           .map((j) => Track.fromJson(Map<String, dynamic>.from(j as Map)))
           .toList();
-      // Publish without loading a network stream during startup.
-      queue.add(tracks.map(_item).toList());
-      final index = (saved['index'] as int? ?? 0).clamp(
+      _index = (saved['index'] as int? ?? 0).clamp(
         0,
         tracks.isEmpty ? 0 : tracks.length - 1,
       );
-      if (tracks.isNotEmpty) mediaItem.add(_item(tracks[index]));
-      _restoredIndex = index;
-      _restoredPosition = Duration(
-        milliseconds: saved['position'] as int? ?? 0,
-      );
+      _position = Duration(milliseconds: saved['position'] as int? ?? 0);
+      shuffleEnabled = saved['shuffle'] == true;
+      repeatMode =
+          AudioServiceRepeatMode.values
+              .where((m) => m.name == saved['repeat'])
+              .firstOrNull ??
+          AudioServiceRepeatMode.none;
     }
+    _rebuildOrder();
+    _publishQueue();
     _initialized = true;
     _broadcast();
   }
 
-  int _restoredIndex = 0;
-  Duration _restoredPosition = Duration.zero;
-  bool _loaded = false;
-  Future<void> _hydrate(int index) async {
-    if (resolveOnline == null) return;
-    final reference = tracks[index];
-    try {
-      final fresh = await resolveOnline!(reference);
-      if (index >= tracks.length || !identical(tracks[index], reference)) {
-        return;
-      }
-      if (!fresh.streamable) {
-        errors.add('This Audius track is no longer publicly streamable.');
-        await pause();
-        return;
-      }
-      tracks[index] = fresh;
-      queue.add(tracks.map(_item).toList());
-      if (activeIndex == index) mediaItem.add(_item(fresh));
-    } catch (e) {
-      if (!errors.isClosed) errors.add(e.toString());
+  void _rebuildOrder() {
+    _order = List.generate(tracks.length, (i) => i);
+    if (shuffleEnabled && tracks.isNotEmpty) {
+      _order.remove(_index);
+      _order.shuffle(random);
+      _order.insert(0, _index);
     }
+  }
+
+  void _publishQueue() {
+    queue.add(tracks.map(_item).toList());
+    mediaItem.add(current == null ? null : _item(current!));
   }
 
   MediaItem _item(Track t) => MediaItem(
     id: t.id,
     title: t.title,
     artist: t.artist,
-    album: t.online ? 'Audius' : t.album,
-    duration: Duration(milliseconds: t.durationMs),
+    album: t.online ? t.source.label : t.album,
+    duration: t.durationMs > 0 ? Duration(milliseconds: t.durationMs) : null,
+    // Avoid audio_service's persistent remote artwork cache.
     artUri: t.online || t.artwork == null ? null : Uri.tryParse(t.artwork!),
-    extras: {'uri': t.uri},
+    extras: {'source': t.source.name, 'sourceUrl': t.sourceUrl},
   );
+
   Future<void> setQueue(
     List<Track> next, {
     int index = 0,
     Duration position = Duration.zero,
     bool start = true,
   }) async {
-    final generation = ++_loadGeneration;
+    if (_disposed) return;
     if (next.isEmpty) {
-      await player.stop();
-      tracks = [];
-      queue.add([]);
-      mediaItem.add(null);
+      ++_loadGeneration;
+      _cancel?.cancel();
+      _wantsPlay = false;
       _loaded = false;
+      _loading = false;
+      _stream = null;
+      tracks = [];
+      _index = 0;
+      _position = Duration.zero;
+      _order = [];
+      await player.stop();
+      _publishQueue();
+      _broadcast();
       await save();
       return;
     }
-    index = index.clamp(0, next.length - 1);
-    if (next[index].online && resolveOnline != null) {
-      try {
-        next = List.of(next);
-        next[index] = await resolveOnline!(next[index]);
-      } catch (e) {
-        errors.add(e.toString());
+    final bounded = boundedQueue(next, index.clamp(0, next.length - 1));
+    if (bounded.$1.isEmpty) {
+      errors.add('No playable tracks in this selection.');
+      return;
+    }
+    tracks = List.of(bounded.$1);
+    _index = bounded.$2;
+    _position = position;
+    _wantsPlay = start;
+    _automaticRetries = 0;
+    _rebuildOrder();
+    _publishQueue();
+    await _load(position: position);
+  }
+
+  Future<void> _load({
+    Duration position = Duration.zero,
+    bool alternative = false,
+  }) async {
+    final reference = current;
+    if (reference == null || _disposed) return;
+    final generation = ++_loadGeneration;
+    _cancel?.cancel();
+    final cancel = _cancel = CancelToken();
+    _loaded = false;
+    _loading = true;
+    _stream = null;
+    _position = position;
+    _broadcast();
+    await player.pause();
+    if (generation != _loadGeneration || _disposed) return;
+    // A failed resolution must still leave the selected queue available to retry.
+    await save();
+    try {
+      final resolved = resolve == null
+          ? ResolvedTrack(
+              reference,
+              ResolvedStream(uri: Uri.parse(reference.uri)),
+            )
+          : await resolve!(reference, cancel: cancel, alternative: alternative);
+      if (generation != _loadGeneration || _disposed) return;
+      if (!resolved.track.streamable) {
+        throw const SourceException(
+          'restricted',
+          'This track cannot be streamed.',
+        );
+      }
+      if (!resolved.stream.freshAt(DateTime.now())) {
+        throw const SourceException('expired', 'Stream expired. Please retry.');
+      }
+      tracks[_index] = resolved.track;
+      _stream = resolved.stream;
+      _publishQueue();
+      final requestedPosition = _position;
+      await player.setAudioSource(
+        AudioSource.uri(
+          resolved.stream.uri,
+          headers: resolved.stream.headers,
+          tag: _item(resolved.track),
+        ),
+        initialPosition: requestedPosition,
+      );
+      if (generation != _loadGeneration || _disposed) return;
+      if (_position != requestedPosition) {
+        await player.seek(_position);
+        if (generation != _loadGeneration || _disposed) return;
+      }
+      _loaded = true;
+      _loading = false;
+      _broadcast();
+      await save();
+      if (_wantsPlay) _startEngine();
+    } catch (e) {
+      if (generation != _loadGeneration || _disposed || cancel.isCancelled) {
         return;
       }
-    }
-    if (generation != _loadGeneration) return;
-    if (!next[index].streamable) {
-      errors.add('This Audius track is restricted and cannot be streamed.');
-      return;
-    }
-    final bounded = boundedQueue(next, index);
-    next = bounded.$1;
-    index = bounded.$2;
-    await player.pause();
-    if (generation != _loadGeneration) return;
-    _loaded = false;
-    tracks = List.of(next);
-    queue.add(tracks.map(_item).toList());
-    mediaItem.add(_item(tracks[index]));
-    _restoredIndex = index;
-    _restoredPosition = position;
-    try {
-      await player.setAudioSources(
-        tracks
-            .map((t) => AudioSource.uri(Uri.parse(t.uri), tag: _item(t)))
-            .toList(),
-        initialIndex: index,
-        initialPosition: position,
-      );
-      if (generation != _loadGeneration) return;
-      _loaded = true;
-      await save();
-      if (start) unawaited(play());
-    } catch (e) {
-      if (generation != _loadGeneration) return;
+      _loading = false;
       _loaded = false;
-      _failure(e);
+      if (reference.online &&
+          e is PlayerException &&
+          _automaticRetries == 0 &&
+          _wantsPlay) {
+        _automaticRetries++;
+        await _load(position: _position, alternative: true);
+        return;
+      }
+      // Exceptions from extractors are already sanitized; engine exceptions may
+      // contain signed URLs and must never be displayed or persisted.
+      _wantsPlay = false;
+      errors.add(
+        e is SourceException || e is DiscoveryException
+            ? e.toString()
+            : _playbackMessage,
+      );
+      _broadcast();
       await save();
     }
   }
 
-  void _failure(Object e) {
-    if (_loaded) {
-      _restoredIndex = player.currentIndex ?? 0;
-      _restoredPosition = player.position;
-    }
-    _loaded = false;
-    unawaited(pause());
-    errors.add(
-      'Playback unavailable. Check your connection for Audius, or refresh Library for moved, deleted, or unsupported files. Your queue is preserved.',
+  String get _playbackMessage => current?.online == true
+      ? '${current!.source.label} playback unavailable. Retry or choose phone music in Library. Your queue is preserved.'
+      : 'Playback unavailable. Refresh Library for moved, deleted, or unsupported files. Your queue is preserved.';
+
+  void _startEngine() {
+    unawaited(
+      player.play().catchError((Object e) {
+        unawaited(_failure(e));
+      }),
     );
   }
 
+  Future<void> _failure(Object error) async {
+    if (_loading || _recovering || _disposed || !_loaded) return;
+    _position = player.position;
+    _loaded = false;
+    if (current?.online == true && _wantsPlay && _automaticRetries == 0) {
+      _automaticRetries++;
+      _recovering = true;
+      try {
+        await _load(position: _position, alternative: true);
+      } finally {
+        _recovering = false;
+      }
+      return;
+    }
+    _wantsPlay = false;
+    await player.pause();
+    if (!errors.isClosed) errors.add(_playbackMessage);
+    _broadcast();
+    await save();
+  }
+
+  Future<void> _complete() async {
+    if (repeatMode == AudioServiceRepeatMode.one) {
+      await _select(_index);
+      return;
+    }
+    final next = _neighbor(1);
+    if (next != null) {
+      await _select(next);
+    } else {
+      _wantsPlay = false;
+      await player.pause();
+      _broadcast();
+      await save();
+    }
+  }
+
+  int? _neighbor(int direction) {
+    if (_order.isEmpty) return null;
+    final slot = _order.indexOf(_index) + direction;
+    if (slot >= 0 && slot < _order.length) return _order[slot];
+    if (repeatMode == AudioServiceRepeatMode.all) {
+      return direction > 0 ? _order.first : _order.last;
+    }
+    return null;
+  }
+
+  Future<void> _select(int index) async {
+    _index = index;
+    _position = Duration.zero;
+    _automaticRetries = 0;
+    _publishQueue();
+    await _load();
+  }
+
   void _broadcast() {
+    if (_disposed) return;
     playbackState.add(
       PlaybackState(
         controls: [
           MediaControl.skipToPrevious,
-          player.playing ? MediaControl.pause : MediaControl.play,
+          _wantsPlay ? MediaControl.pause : MediaControl.play,
           MediaControl.skipToNext,
         ],
         systemActions: const {
@@ -248,26 +382,24 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
           MediaAction.seekBackward,
         },
         androidCompactActionIndices: const [0, 1, 2],
-        processingState: switch (player.processingState) {
-          ProcessingState.idle => AudioProcessingState.idle,
-          ProcessingState.loading => AudioProcessingState.loading,
-          ProcessingState.buffering => AudioProcessingState.buffering,
-          ProcessingState.ready => AudioProcessingState.ready,
-          ProcessingState.completed => AudioProcessingState.completed,
-        },
-        playing: player.playing,
-        updatePosition: player.position,
-        bufferedPosition: player.bufferedPosition,
+        processingState: _loading
+            ? AudioProcessingState.loading
+            : switch (player.processingState) {
+                ProcessingState.idle => AudioProcessingState.idle,
+                ProcessingState.loading => AudioProcessingState.loading,
+                ProcessingState.buffering => AudioProcessingState.buffering,
+                ProcessingState.ready => AudioProcessingState.ready,
+                ProcessingState.completed => AudioProcessingState.completed,
+              },
+        playing: _wantsPlay && (_loaded || _loading),
+        updatePosition: position,
+        bufferedPosition: _loaded ? player.bufferedPosition : Duration.zero,
         speed: player.speed,
-        queueIndex: player.currentIndex,
-        shuffleMode: player.shuffleModeEnabled
+        queueIndex: tracks.isEmpty ? null : _index,
+        shuffleMode: shuffleEnabled
             ? AudioServiceShuffleMode.all
             : AudioServiceShuffleMode.none,
-        repeatMode: switch (player.loopMode) {
-          LoopMode.off => AudioServiceRepeatMode.none,
-          LoopMode.one => AudioServiceRepeatMode.one,
-          LoopMode.all => AudioServiceRepeatMode.all,
-        },
+        repeatMode: repeatMode,
       ),
     );
   }
@@ -276,133 +408,151 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
     if (!_initialized) return;
     await store.write('playback', {
       'tracks': tracks.map((t) => t.toSavedJson()).toList(),
-      'index': _loaded ? player.currentIndex ?? 0 : _restoredIndex,
-      'position': _loaded
-          ? player.position.inMilliseconds
-          : _restoredPosition.inMilliseconds,
+      'index': _index,
+      'position': position.inMilliseconds,
+      'shuffle': shuffleEnabled,
+      'repeat': repeatMode.name,
     });
   }
 
   @override
   Future<void> play() async {
-    if (tracks.isEmpty) return;
-    if (!_loaded) {
-      await setQueue(
-        tracks,
-        index: _restoredIndex,
-        position: _restoredPosition,
-        start: false,
-      );
+    if (tracks.isEmpty || _disposed) return;
+    _wantsPlay = true;
+    if (_loading) {
+      _broadcast();
+      return;
     }
-    if (_loaded) {
-      if (player.processingState == ProcessingState.completed) {
-        await player.seek(Duration.zero, index: activeIndex);
-      }
-      unawaited(
-        player.play().catchError((Object e) {
-          _failure(e);
-        }),
-      );
+    _automaticRetries = 0;
+    if (!_loaded || (_stream != null && !_stream!.freshAt(DateTime.now()))) {
+      final at = position;
+      await _load(position: at);
+      return;
     }
+    if (player.processingState == ProcessingState.completed) {
+      await _load();
+      return;
+    }
+    _startEngine();
+    _broadcast();
   }
 
   @override
   Future<void> pause() async {
+    // A user pause or sleep timer during a call must cancel focus-gain resume.
+    _resumeAfterInterruption = false;
+    await _pauseEngine();
+  }
+
+  Future<void> _pauseEngine() async {
+    _wantsPlay = false;
     await player.pause();
+    _broadcast();
     await save();
   }
 
   @override
   Future<void> seek(Duration position) async {
-    if (_loaded) {
-      await player.seek(position);
-    } else {
-      _restoredPosition = position;
+    final at = position.isNegative ? Duration.zero : position;
+    if (_loading) {
+      _position = at;
+      await save();
+      return;
     }
+    if (_loaded && (_stream?.freshAt(DateTime.now()) ?? true)) {
+      try {
+        await player.seek(at);
+      } catch (e) {
+        await _failure(e);
+      }
+    } else {
+      _position = at;
+      if (_loaded) await _load(position: at);
+    }
+    _broadcast();
     await save();
   }
 
   @override
   Future<void> skipToNext() async {
-    if (!_loaded && activeIndex + 1 < tracks.length) {
-      await setQueue(tracks, index: activeIndex + 1);
-    } else if (player.hasNext) {
-      await player.seekToNext();
+    final next = _neighbor(1);
+    if (next != null) {
+      _wantsPlay = true;
+      await _select(next);
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    if (!_loaded && activeIndex > 0) {
-      await setQueue(tracks, index: activeIndex - 1);
-      return;
-    }
     if (position > const Duration(seconds: 3)) {
       await seek(Duration.zero);
-    } else if (player.hasPrevious) {
-      await player.seekToPrevious();
+      return;
+    }
+    final previous = _neighbor(-1);
+    if (previous != null) {
+      _wantsPlay = true;
+      await _select(previous);
     }
   }
 
   @override
   Future<void> skipToQueueItem(int index) async {
     if (index < 0 || index >= tracks.length) return;
-    if (!_loaded) {
-      await setQueue(tracks, index: index);
-    } else if (tracks[index].streamable) {
-      await player.seek(Duration.zero, index: index);
-    }
+    _wantsPlay = true;
+    await _select(index);
   }
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
-    await player.setLoopMode(switch (repeatMode) {
-      AudioServiceRepeatMode.one => LoopMode.one,
-      AudioServiceRepeatMode.all => LoopMode.all,
-      _ => LoopMode.off,
-    });
+    this.repeatMode = repeatMode == AudioServiceRepeatMode.group
+        ? AudioServiceRepeatMode.all
+        : repeatMode;
     _broadcast();
+    await save();
   }
 
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
-    await player.setShuffleModeEnabled(
-      shuffleMode == AudioServiceShuffleMode.all,
-    );
+    shuffleEnabled = shuffleMode != AudioServiceShuffleMode.none;
+    _rebuildOrder();
     _broadcast();
+    await save();
   }
 
   Future<void> reorder(int oldIndex, int newIndex) async {
-    final selected = reorderedActiveIndex(activeIndex, oldIndex, newIndex);
-    final savedPosition = position;
-    final next = moveQueueItem(tracks, oldIndex, newIndex);
-    await setQueue(
-      next,
-      index: selected,
-      position: savedPosition,
-      start: player.playing,
-    );
+    final selected = reorderedActiveIndex(_index, oldIndex, newIndex);
+    final at = position;
+    tracks = moveQueueItem(tracks, oldIndex, newIndex);
+    _index = selected;
+    _rebuildOrder();
+    _publishQueue();
+    if (_loading) await _load(position: at);
+    _broadcast();
+    await save();
   }
 
   Future<void> remove(int index) async {
-    final previous = activeIndex;
-    final savedPosition = position;
-    final next = List<Track>.of(tracks)..removeAt(index);
-    final active = previous == index
-        ? -1
-        : previous > index
-        ? previous - 1
-        : previous;
-    await setQueue(
-      next,
-      index: next.isEmpty
-          ? 0
-          : active < 0
-          ? index.clamp(0, next.length - 1)
-          : active,
-      position: active < 0 ? Duration.zero : savedPosition,
-      start: player.playing,
-    );
+    if (index < 0 || index >= tracks.length) return;
+    final selected = index == _index;
+    final wasPlaying = _wantsPlay;
+    tracks = List.of(tracks)..removeAt(index);
+    if (tracks.isEmpty) {
+      await setQueue([]);
+      return;
+    }
+    if (index < _index) _index--;
+    if (_index >= tracks.length) _index = tracks.length - 1;
+    _rebuildOrder();
+    _publishQueue();
+    if (selected) {
+      _wantsPlay = wasPlaying;
+      _automaticRetries = 0;
+      await _load();
+    } else if (_loading) {
+      await _load(position: position);
+    }
+    _broadcast();
+    await save();
   }
 
   void sleepFor(Duration? duration) {
@@ -418,12 +568,22 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
+    ++_loadGeneration;
+    _cancel?.cancel();
+    _loading = false;
     await pause();
+    _position = position;
+    _loaded = false;
+    _stream = null;
     await player.stop();
+    _broadcast();
+    await save();
     await super.stop();
   }
 
   Future<void> dispose() async {
+    ++_loadGeneration;
+    _cancel?.cancel();
     _sleep?.cancel();
     _persist?.cancel();
     for (final subscription in _subscriptions) {
@@ -432,6 +592,7 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
     await Future.wait(_pending.toList());
     await save();
     _initialized = false;
+    _disposed = true;
     await player.dispose();
     await errors.close();
   }

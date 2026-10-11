@@ -34,7 +34,7 @@ class MainActivity : AudioServiceActivity() {
                 "openSettings" -> { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))); result.success(null) }
                 "openUrl" -> {
                     val uri = Uri.parse(call.argument<String>("url"))
-                    if (uri.scheme == "https" && uri.host in setOf("audius.co", "audius.org")) {
+                    if (uri.scheme == "https" && uri.host in setOf("audius.co", "audius.org", "www.youtube.com", "youtube.com", "policies.google.com")) {
                         try { startActivity(Intent(Intent.ACTION_VIEW, uri)); result.success(null) }
                         catch (e: Exception) { result.error("browser", "No browser available.", null) }
                     } else result.error("url", "Unsupported URL", null)

@@ -1,0 +1,32 @@
+Svara is distributed under GPL-3.0-or-later. See GPL-3.0.txt.
+Copyright Svara contributors. No warranty is provided.
+
+NewPipeExtractor v0.26.5 — Team NewPipe and contributors
+GPL-3.0-or-later
+Source and corresponding build files:
+https://github.com/TeamNewPipe/NewPipeExtractor/tree/v0.26.5
+
+Native dependencies (the exact versions are pinned in the Android build):
+- nanojson e9d656ddb49a412a5a0a5d5ef20ca7ef09549996 — Apache-2.0
+  https://github.com/TeamNewPipe/nanojson
+- jsoup 1.22.2 — MIT, Jonathan Hedley and contributors
+  https://jsoup.org/license
+- Rhino / rhino-engine 1.8.1 — MPL-2.0, Mozilla and contributors
+  https://github.com/mozilla/rhino/tree/Rhino1_8_1_Release
+- protobuf-javalite 4.35.1 — BSD-3-Clause, Google
+  https://github.com/protocolbuffers/protobuf
+- jsr305 3.0.2 — Apache-2.0
+  https://central.sonatype.com/artifact/com.google.code.findbugs/jsr305
+- OkHttp 4.12.0 / Okio 3.6.0 — Apache-2.0, Square and contributors
+  https://github.com/square/okhttp/tree/parent-4.12.0
+  https://github.com/square/okio/tree/parent-3.6.0
+- Kotlin standard library — Apache-2.0, JetBrains and contributors
+  https://github.com/JetBrains/kotlin
+- Android desugar_jdk_libs_nio 2.1.5 — OpenJDK GPL-2.0 with Classpath Exception
+  and Android Apache-2.0 portions; see the upstream notices.
+  https://github.com/google/desugar_jdk_libs
+
+Flutter and Dart package license notices are registered by Flutter and shown
+alongside this notice in Settings > Open-source licenses.
+These software licenses do not grant rights to YouTube recordings or access
+outside YouTube's terms. No online recordings are bundled with Svara.

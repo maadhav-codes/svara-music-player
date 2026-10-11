@@ -115,9 +115,9 @@ class AudiusRepository {
         .toList();
   }
 
-  Future<Track> track(Track reference) async => _track(
+  Future<Track> track(Track reference, {CancelToken? cancel}) async => _track(
     Map<String, dynamic>.from(
-      await get('/v1/tracks/${reference.id.substring(7)}', {}),
+      await get('/v1/tracks/${reference.providerId}', {}, cancel: cancel),
     ),
   );
   Track _track(Map<String, dynamic> j) {
