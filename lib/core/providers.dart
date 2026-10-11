@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 
 import 'store.dart';
+import 'track.dart';
+import '../features/playlists/favorites_repository.dart';
 import '../features/library/library_repository.dart';
 import '../features/discovery/audius_repository.dart';
 import '../features/discovery/youtube_repository.dart';
@@ -46,18 +48,26 @@ final favoritesProvider = NotifierProvider<FavoritesController, Set<String>>(
 );
 
 class FavoritesController extends Notifier<Set<String>> {
-  @override
-  Set<String> build() => {};
-  Future<void> load() async {
-    state = ((await ref.read(storeProvider).read('favorites') as List?) ?? [])
-        .cast<String>()
-        .toSet();
+  Future<void> _pending = Future<void>.value();
+
+  Future<void> _serialize(Future<void> Function() action) {
+    final operation = _pending.then((_) => action());
+    _pending = operation.catchError((Object _) {});
+    return operation;
   }
 
-  Future<void> toggle(String id) async {
-    final next = {...state};
-    if (!next.add(id)) next.remove(id);
-    state = next;
-    await ref.read(storeProvider).write('favorites', state.toList());
-  }
+  @override
+  Set<String> build() => {};
+  Future<void> load() => _serialize(() async {
+    state = await FavoritesRepository(ref.read(storeProvider)).ids();
+  });
+
+  Future<void> toggle(Track track) => _serialize(() async {
+    state = await FavoritesRepository(ref.read(storeProvider)).toggle(track);
+  });
 }
+
+final favoriteTracksProvider = FutureProvider<List<Track>>((ref) {
+  ref.watch(favoritesProvider);
+  return FavoritesRepository(ref.watch(storeProvider)).tracks();
+});

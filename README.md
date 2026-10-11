@@ -65,7 +65,9 @@ Downward swipes on the mini-player do nothing. You can also use its Play/Pause a
 
 ### Playlists
 
-Open a song’s options and choose **Add to Playlist**. Select an existing playlist or choose **New playlist**, enter a name, and save it. Open the **Playlists** tab to play and manage collections, including reordering their tracks.
+Tap the **heart** in the full player, or choose **Favorite** from a song’s options, to save it automatically in **Playlists → Favorites**. Open Favorites to play all saved songs or choose one to start from. Tap the heart again, choose **Unfavorite**, or use **Remove from Favorites** to remove it. Favorites is a built-in collection and cannot be renamed or deleted. Local and online favorites survive app restarts; online entries save references and still need internet access.
+
+Tap **Add to playlist** beside the heart in the full player, or open a song’s options and choose **Add to Playlist**. Select an existing playlist or choose **New playlist**, enter a name, and save it; the current song is added automatically. Open the **Playlists** tab to play and manage collections, including reordering their tracks.
 
 Saving an online track saves a reference, not an audio file. It still needs internet access and must remain available from its provider.
 

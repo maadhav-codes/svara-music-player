@@ -566,7 +566,7 @@ Future<void> showTrackOptions(
   if (action == null || !context.mounted) return;
   switch (action) {
     case 'favorite':
-      await ref.read(favoritesProvider.notifier).toggle(track.id);
+      await ref.read(favoritesProvider.notifier).toggle(track);
     case 'playlist':
       await addToPlaylist(context, ref, track);
     case 'next':

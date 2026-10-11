@@ -13,6 +13,7 @@ import '../../core/track.dart';
 import '../../core/media_source.dart';
 import '../../core/artwork.dart';
 import '../library/library_screen.dart';
+import '../playlists/playlists_screen.dart';
 import 'svara_handler.dart';
 
 String timeLabel(Duration value) =>
@@ -461,21 +462,59 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                       }
                                     },
                                   ),
-                                IconButton(
-                                  tooltip:
-                                      ref
-                                          .watch(favoritesProvider)
-                                          .contains(t.id)
-                                      ? 'Remove favorite'
-                                      : 'Favorite',
-                                  onPressed: () => ref
-                                      .read(favoritesProvider.notifier)
-                                      .toggle(t.id),
-                                  icon: Icon(
-                                    ref.watch(favoritesProvider).contains(t.id)
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                  ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      tooltip:
+                                          ref
+                                              .watch(favoritesProvider)
+                                              .contains(t.id)
+                                          ? 'Remove favorite'
+                                          : 'Favorite',
+                                      onPressed: () async {
+                                        String message;
+                                        try {
+                                          await ref
+                                              .read(favoritesProvider.notifier)
+                                              .toggle(t);
+                                          if (!context.mounted) return;
+                                          message =
+                                              ref
+                                                  .read(favoritesProvider)
+                                                  .contains(t.id)
+                                              ? 'Added to Favorites in Playlists'
+                                              : 'Removed from Favorites';
+                                        } catch (_) {
+                                          message = 'Could not update Favorites. Please try again.';
+                                        }
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                          ..hideCurrentSnackBar()
+                                          ..showSnackBar(
+                                            SnackBar(
+                                              content: Text(message),
+                                              duration: const Duration(
+                                                seconds: 2,
+                                              ),
+                                            ),
+                                          );
+                                      },
+                                      icon: Icon(
+                                        ref
+                                                .watch(favoritesProvider)
+                                                .contains(t.id)
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Add to playlist',
+                                      onPressed: () =>
+                                          addToPlaylist(context, ref, t),
+                                      icon: const Icon(Icons.playlist_add),
+                                    ),
+                                  ],
                                 ),
                               ],
                             );

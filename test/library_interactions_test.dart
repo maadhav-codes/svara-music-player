@@ -8,6 +8,7 @@ import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
 import 'package:svara/features/library/library_screen.dart';
 import 'package:svara/features/player/svara_handler.dart';
+import 'package:svara/features/player/player_screen.dart';
 import 'package:svara/features/playlists/playlists_repository.dart';
 import 'package:svara/features/playlists/playlists_screen.dart';
 
@@ -85,6 +86,113 @@ void main() {
     );
     await settle(tester);
   }
+
+  testWidgets(
+    'full player adds the current song to new and existing playlists',
+    (tester) async {
+      await tester.runAsync(() async {
+        await handler.restore();
+        await handler.setQueue([song], start: false);
+      });
+      await mount(tester, const PlayerScreen());
+      expect(
+        tester.getCenter(find.byTooltip('Add to playlist')).dx,
+        greaterThan(tester.getCenter(find.byTooltip('Favorite')).dx),
+      );
+      await tester.tap(find.byTooltip('Add to playlist'));
+      await settle(tester);
+      await tester.tap(find.text('New playlist'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Morning mix');
+      await tester.tap(find.text('Save'));
+      await settle(tester);
+      final repo = PlaylistsRepository(store);
+      var playlists = await tester.runAsync(repo.all);
+      expect(playlists!.single.name, 'Morning mix');
+      expect(playlists.single.tracks.single.id, song.id);
+      expect(find.text('Saved to playlist'), findsOneWidget);
+
+      await tester.runAsync(() => handler.setQueue([second], start: false));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add to playlist'));
+      await settle(tester);
+      await tester.tap(find.text('Morning mix'));
+      await settle(tester);
+      playlists = await tester.runAsync(repo.all);
+      expect(playlists!.single.tracks.map((track) => track.id), [
+        song.id,
+        second.id,
+      ]);
+
+      await tester.tap(find.byTooltip('Add to playlist'));
+      await settle(tester);
+      await tester.tap(find.text('Morning mix'));
+      await settle(tester);
+      playlists = await tester.runAsync(repo.all);
+      expect(playlists!.single.tracks.length, 2);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
+
+  testWidgets(
+    'player heart saves a playable Favorites collection and removal updates heart',
+    (tester) async {
+      await tester.runAsync(() async {
+        await handler.restore();
+        await handler.setQueue([song], start: false);
+      });
+      await mount(tester, const PlayerScreen());
+      await tester.tap(find.byTooltip('Favorite'));
+      await settle(tester);
+      expect(find.byTooltip('Remove favorite'), findsOneWidget);
+      expect(find.text('Added to Favorites in Playlists'), findsOneWidget);
+      await tester.tap(find.byTooltip('Remove favorite'));
+      await settle(tester);
+      expect(find.text('Removed from Favorites'), findsOneWidget);
+      expect(find.text('Added to Favorites in Playlists'), findsNothing);
+      await tester.tap(find.byTooltip('Favorite'));
+      await settle(tester);
+      expect(find.text('Added to Favorites in Playlists'), findsOneWidget);
+
+      final context = tester.element(find.byType(PlayerScreen));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Playlists')),
+            body: const PlaylistsScreen(),
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('Favorites'), findsOneWidget);
+      expect(find.text('1 track • Saved with the heart'), findsOneWidget);
+      await tester.tap(find.text('Favorites'));
+      await settle(tester);
+      expect(find.text('First light'), findsOneWidget);
+      await tester.tap(find.text('Play favorites'));
+      await settle(tester);
+      expect(handler.tracks.single.id, song.id);
+      expect(handler.player.playing, isTrue);
+
+      await tester.tap(find.byTooltip('Song options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove from Favorites'));
+      await settle(tester);
+      await settle(tester);
+      expect(find.text('Your favorites start with a heart'), findsOneWidget);
+      expect(await tester.runAsync(() => store.read('favorites')), isEmpty);
+      await tester.tap(find.byType(BackButton));
+      await settle(tester);
+      expect(find.text('0 tracks • Saved with the heart'), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await settle(tester);
+      expect(find.byTooltip('Favorite'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'chips filter in one tap, stay pinned and offer Discover for empty search',

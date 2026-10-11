@@ -113,6 +113,7 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
   }
 
   Future<void> load() async {
+    ref.invalidate(favoriteTracksProvider);
     final value = await repo.all();
     if (mounted) setState(() => lists = value);
   }
@@ -152,11 +153,38 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
             ],
           ),
         ),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 8,
+          ),
+          leading: const Icon(Icons.favorite, size: 36),
+          title: const Text('Favorites'),
+          subtitle: Text(
+            ref
+                .watch(favoriteTracksProvider)
+                .when(
+                  data: (tracks) =>
+                      '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'} • Saved with the heart',
+                  loading: () => 'Loading favorites…',
+                  error: (_, _) => 'Could not load favorites. Pull to retry.',
+                ),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            ref.invalidate(favoriteTracksProvider);
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => FavoritesScreen(onLibrary: widget.onLibrary),
+              ),
+            );
+          },
+        ),
         if (lists.isEmpty)
           MusicEmptyState(
-            title: 'Make room for your favorites',
-            message:
-                'Create a playlist, then add songs from their three-dot menu.',
+            title: 'Make a playlist of your own',
+            message: 'Tap a song’s heart to save it in Favorites, or create a playlist for a mood.',
             actionLabel: 'Create playlist',
             onAction: createPlaylist,
             icon: Icons.queue_music,
@@ -203,6 +231,78 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
         ),
       ],
     ),
+  );
+}
+
+class FavoritesScreen extends ConsumerWidget {
+  const FavoritesScreen({this.onLibrary, super.key});
+  final VoidCallback? onLibrary;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+    appBar: AppBar(title: const Text('Favorites')),
+    body: ref
+        .watch(favoriteTracksProvider)
+        .when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => MusicEmptyState(
+            title: 'Could not load favorites',
+            message: 'Please try again.',
+            actionLabel: 'Retry',
+            onAction: () => ref.invalidate(favoriteTracksProvider),
+            icon: Icons.favorite_border,
+          ),
+          data: (tracks) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton.icon(
+                  onPressed: tracks.any((track) => track.streamable)
+                      ? () => ref
+                            .read(handlerProvider)
+                            .setQueue(
+                              tracks
+                                  .where((track) => track.streamable)
+                                  .toList(),
+                            )
+                      : null,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Play favorites'),
+                ),
+              ),
+              Expanded(
+                child: tracks.isEmpty
+                    ? SingleChildScrollView(
+                        child: MusicEmptyState(
+                          title: 'Your favorites start with a heart',
+                          message: 'Tap the heart in the full player or choose Favorite from a song’s menu. Your saved songs will appear here.',
+                          actionLabel: onLibrary == null
+                              ? 'Back to playlists'
+                              : 'Browse Library',
+                          onAction: () {
+                            Navigator.pop(context);
+                            onLibrary?.call();
+                          },
+                          icon: Icons.favorite_border,
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: tracks.length,
+                        itemBuilder: (_, i) => SongTile(
+                          tracks[i],
+                          removeLabel: 'Remove from Favorites',
+                          onRemove: () => ref
+                              .read(favoritesProvider.notifier)
+                              .toggle(tracks[i]),
+                          onPlay: () => ref
+                              .read(handlerProvider)
+                              .setQueue(tracks, index: i),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
   );
 }
 
