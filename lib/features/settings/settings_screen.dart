@@ -161,7 +161,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('Svara'),
-            subtitle: const Text('Version 2.1.1 • 100% Free & Open Source'),
+            subtitle: const Text('Version 2.2.0 • 100% Free & Open Source'),
           ),
           ListTile(
             leading: const Icon(Icons.code_outlined),
