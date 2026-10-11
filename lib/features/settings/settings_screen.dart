@@ -133,7 +133,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.delete_sweep_outlined),
             title: const Text('Clear listening history'),
-            subtitle: const Text('Remove recently played tracks from Quick Mix'),
+            subtitle: const Text(
+              'Remove recently played tracks from Quick Mix',
+            ),
             onTap: () async {
               await ref.read(storeProvider).db.delete('history');
               if (context.mounted) {
