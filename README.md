@@ -197,3 +197,11 @@ Swipe left on the mini-player for Next, right for Previous, and up to open the f
 When search is empty, tap **Trending Today**, **Top Charts**, **Chill / Lofi**, **Workout**, **Pop**, or **Rock** to explore without typing. Chips stay visible while results load in one horizontally scrollable row, including with larger text. Audius starts with Trending Today selected; the provider and actual time range appear in a subtle sub-header. Typing returns to normal search; clearing the field restores browse suggestions. Category selection follows source switching, refresh, retry and pagination.
 
 Audius uses genre-filtered weekly trending for Lo-Fi, Pop and Rock, and a music search for Workout. Its Trending Today shortcut shows weekly trending and Top Charts shows monthly trending, with the actual range labeled below the heading; these are Audius rankings rather than global daily charts. YouTube categories launch labeled suggested music searches. Provider ranges and genre filters follow the [official Audius documentation](https://docs.audius.co/sdk/tracks/).
+
+---
+
+## 👨‍💻 Author
+
+**Mayur Dayal**
+
+- Email: [mayurdayal.engineer@gmail.com](mailto:mayurdayal.engineer@gmail.com)

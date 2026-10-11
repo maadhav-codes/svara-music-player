@@ -1,5 +1,5 @@
 Svara is distributed under GPL-3.0-or-later. See GPL-3.0.txt.
-Copyright Svara contributors. No warranty is provided.
+Copyright Mayur Dayal and Svara contributors. No warranty is provided.
 
 NewPipeExtractor v0.26.5 — Team NewPipe and contributors
 GPL-3.0-or-later
