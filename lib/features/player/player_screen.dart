@@ -192,6 +192,7 @@ class PlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => StreamBuilder<PlaybackState>(
     stream: handler.playbackState,
+    initialData: handler.playbackState.value,
     builder: (_, snapshot) {
       final playing = snapshot.data?.playing ?? false;
       final loading =
@@ -206,7 +207,13 @@ class PlayButton extends StatelessWidget {
             ? SizedBox(
                 width: large ? 44 : 28,
                 height: large ? 44 : 28,
-                child: const CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  backgroundColor: Theme.of(context).colorScheme.onPrimary
+                      .withValues(alpha: 0.2),
+                  semanticsLabel: 'Loading track',
+                ),
               )
             : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
       );
@@ -331,240 +338,413 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 body: t == null
                     ? const Center(child: Text('Choose a song to begin.'))
                     : SafeArea(
-                        child: SingleChildScrollView(
-                          controller: _scroll,
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              const SizedBox(height: 16),
-                              StreamBuilder<Duration>(
-                                stream: h.player.positionStream,
-                                builder: (_, pos) {
-                                  final duration =
-                                      h.player.duration ??
-                                      Duration(milliseconds: t.durationMs);
-                                  final progress = duration.inMilliseconds <= 0
-                                      ? 0.0
-                                      : ((h.position).inMilliseconds /
-                                                duration.inMilliseconds)
-                                            .clamp(0.0, 1.0);
-                                  final size =
-                                      (MediaQuery.sizeOf(context).width - 80)
-                                          .clamp(160.0, 300.0);
-                                  return GestureDetector(
-                                    onVerticalDragEnd: (details) {
-                                      if ((details.primaryVelocity ?? 0) <
-                                          -150) {
-                                        openLyrics(context);
-                                      }
-                                    },
-                                    child: Semantics(
-                                      label:
-                                          'Track progress ${(progress * 100).round()} percent. Swipe up for lyrics',
-                                      child: SizedBox(
-                                        width: size,
-                                        height: size,
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            SizedBox.expand(
-                                              child: CircularProgressIndicator(
-                                                value: progress,
-                                                strokeWidth: 4,
-                                                backgroundColor:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .surfaceContainerHighest,
-                                              ),
-                                            ),
-                                            ClipOval(
-                                              child: TrackArt(
-                                                t,
-                                                size: size - 24,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 32),
-                              Text(
-                                t.title,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                t.artist,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              if (t.online)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    'STREAMING FROM ${t.source.label.toUpperCase()}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      letterSpacing: 2,
-                                    ),
-                                  ),
-                                ),
-                              if (t.source == MediaSource.youtube)
-                                TextButton.icon(
-                                  icon: const Icon(Icons.open_in_new, size: 18),
-                                  label: const Text('Open video in YouTube'),
-                                  onPressed: () async {
-                                    try {
-                                      await ref
-                                          .read(libraryRepositoryProvider)
-                                          .openUrl(t.sourceUrl);
-                                    } catch (_) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'A browser or YouTube app is needed to open this video.',
-                                                ),
-                                              ),
-                                            );
-                                      }
+                        child: LayoutBuilder(
+                          builder: (context, viewport) {
+                            final landscape =
+                                viewport.maxWidth >= 600 &&
+                                viewport.maxWidth > viewport.maxHeight;
+                            final horizontalPadding = viewport.maxWidth < 360
+                                ? 12.0
+                                : 24.0;
+                            Widget artwork(
+                              double size,
+                            ) => StreamBuilder<Duration>(
+                              stream: h.player.positionStream,
+                              builder: (_, pos) {
+                                final duration =
+                                    h.player.duration ??
+                                    Duration(milliseconds: t.durationMs);
+                                final progress = duration.inMilliseconds <= 0
+                                    ? 0.0
+                                    : ((h.position).inMilliseconds /
+                                              duration.inMilliseconds)
+                                          .clamp(0.0, 1.0);
+                                return GestureDetector(
+                                  onVerticalDragEnd: (details) {
+                                    if ((details.primaryVelocity ?? 0) < -150) {
+                                      openLyrics(context);
                                     }
                                   },
+                                  child: Semantics(
+                                    label:
+                                        'Track progress ${(progress * 100).round()} percent. Swipe up for lyrics',
+                                    child: SizedBox(
+                                      width: size,
+                                      height: size,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          SizedBox.expand(
+                                            child: CircularProgressIndicator(
+                                              value: progress,
+                                              strokeWidth: 4,
+                                              backgroundColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest,
+                                            ),
+                                          ),
+                                          ClipOval(
+                                            child: TrackArt(
+                                              t,
+                                              size: (size - 24).clamp(
+                                                0.0,
+                                                size,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                            Widget metadata() => Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  t.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
-                              IconButton(
-                                tooltip:
-                                    ref.watch(favoritesProvider).contains(t.id)
-                                    ? 'Remove favorite'
-                                    : 'Favorite',
-                                onPressed: () => ref
-                                    .read(favoritesProvider.notifier)
-                                    .toggle(t.id),
-                                icon: Icon(
-                                  ref.watch(favoritesProvider).contains(t.id)
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
+                                const SizedBox(height: 8),
+                                Text(
+                                  t.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
                                 ),
-                              ),
-                              StreamBuilder<Duration?>(
-                                stream: h.player.durationStream,
-                                builder: (_, durationSnapshot) =>
-                                    StreamBuilder<Duration>(
-                                      stream: h.player.positionStream,
-                                      builder: (_, pos) {
-                                        final duration =
-                                            durationSnapshot.data ??
-                                            Duration(
-                                              milliseconds: t.durationMs,
-                                            );
-                                        final ms = duration.inMilliseconds
-                                            .toDouble();
-                                        final position = (h.position)
-                                            .inMilliseconds
-                                            .toDouble()
-                                            .clamp(0.0, ms > 0 ? ms : 1.0);
-                                        return Column(
-                                          children: [
-                                            Slider(
-                                              semanticFormatterCallback: (v) =>
-                                                  timeLabel(
-                                                    Duration(
-                                                      milliseconds: v.round(),
-                                                    ),
+                                if (t.online)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      'STREAMING FROM ${t.source.label.toUpperCase()}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ),
+                                if (t.source == MediaSource.youtube)
+                                  TextButton.icon(
+                                    icon: const Icon(
+                                      Icons.open_in_new,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Open video in YouTube'),
+                                    onPressed: () async {
+                                      try {
+                                        await ref
+                                            .read(libraryRepositoryProvider)
+                                            .openUrl(t.sourceUrl);
+                                      } catch (_) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'A browser or YouTube app is needed to open this video.',
                                                   ),
-                                              value: position,
-                                              max: ms > 0 ? ms : 1,
-                                              onChanged: ms <= 0
-                                                  ? null
-                                                  : (value) => h.seek(
+                                                ),
+                                              );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                IconButton(
+                                  tooltip:
+                                      ref
+                                          .watch(favoritesProvider)
+                                          .contains(t.id)
+                                      ? 'Remove favorite'
+                                      : 'Favorite',
+                                  onPressed: () => ref
+                                      .read(favoritesProvider.notifier)
+                                      .toggle(t.id),
+                                  icon: Icon(
+                                    ref.watch(favoritesProvider).contains(t.id)
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                  ),
+                                ),
+                              ],
+                            );
+                            Widget controls() => Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                StreamBuilder<Duration?>(
+                                  stream: h.player.durationStream,
+                                  builder: (_, durationSnapshot) =>
+                                      StreamBuilder<Duration>(
+                                        stream: h.player.positionStream,
+                                        builder: (_, pos) {
+                                          final duration =
+                                              durationSnapshot.data ??
+                                              Duration(
+                                                milliseconds: t.durationMs,
+                                              );
+                                          final ms = duration.inMilliseconds
+                                              .toDouble();
+                                          final position = (h.position)
+                                              .inMilliseconds
+                                              .toDouble()
+                                              .clamp(0.0, ms > 0 ? ms : 1.0);
+                                          return Column(
+                                            children: [
+                                              Slider(
+                                                semanticFormatterCallback:
+                                                    (v) => timeLabel(
                                                       Duration(
-                                                        milliseconds: value
-                                                            .round(),
+                                                        milliseconds: v.round(),
                                                       ),
                                                     ),
-                                            ),
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(timeLabel(h.position)),
-                                                Text(timeLabel(duration)),
-                                              ],
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                              ),
-                              const SizedBox(height: 24),
-                              StreamBuilder<PlaybackState>(
-                                stream: h.playbackState,
-                                builder: (_, state) => Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'Shuffle',
-                                      isSelected: h.shuffleEnabled,
-                                      onPressed: () => h.setShuffleMode(
-                                        h.shuffleEnabled
-                                            ? AudioServiceShuffleMode.none
-                                            : AudioServiceShuffleMode.all,
-                                      ),
-                                      icon: const Icon(Icons.shuffle),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Previous track',
-                                      iconSize: 36,
-                                      onPressed: h.skipToPrevious,
-                                      icon: const Icon(
-                                        Icons.skip_previous_rounded,
-                                      ),
-                                    ),
-                                    PlayButton(h, large: true),
-                                    IconButton(
-                                      tooltip: 'Next track',
-                                      iconSize: 36,
-                                      onPressed: h.skipToNext,
-                                      icon: const Icon(Icons.skip_next_rounded),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Repeat: ${h.repeatMode.name}',
-                                      isSelected:
-                                          h.repeatMode !=
-                                          AudioServiceRepeatMode.none,
-                                      onPressed: () => h.setRepeatMode(
-                                        switch (h.repeatMode) {
-                                          AudioServiceRepeatMode.none =>
-                                            AudioServiceRepeatMode.all,
-                                          AudioServiceRepeatMode.all =>
-                                            AudioServiceRepeatMode.one,
-                                          AudioServiceRepeatMode.one =>
-                                            AudioServiceRepeatMode.none,
-                                          _ => AudioServiceRepeatMode.none,
+                                                value: position,
+                                                max: ms > 0 ? ms : 1,
+                                                onChanged: ms <= 0
+                                                    ? null
+                                                    : (value) => h.seek(
+                                                        Duration(
+                                                          milliseconds: value
+                                                              .round(),
+                                                        ),
+                                                      ),
+                                              ),
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text(timeLabel(h.position)),
+                                                  Text(timeLabel(duration)),
+                                                ],
+                                              ),
+                                            ],
+                                          );
                                         },
                                       ),
-                                      icon: Icon(
-                                        h.repeatMode ==
-                                                AudioServiceRepeatMode.one
-                                            ? Icons.repeat_one
-                                            : Icons.repeat,
-                                      ),
-                                    ),
-                                  ],
                                 ),
+                                const SizedBox(height: 12),
+                                StreamBuilder<PlaybackState>(
+                                  stream: h.playbackState,
+                                  builder: (_, state) => Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Shuffle',
+                                        isSelected: h.shuffleEnabled,
+                                        onPressed: () => h.setShuffleMode(
+                                          h.shuffleEnabled
+                                              ? AudioServiceShuffleMode.none
+                                              : AudioServiceShuffleMode.all,
+                                        ),
+                                        icon: const Icon(Icons.shuffle),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Previous track',
+                                        iconSize: 36,
+                                        onPressed: h.skipToPrevious,
+                                        icon: const Icon(
+                                          Icons.skip_previous_rounded,
+                                        ),
+                                      ),
+                                      PlayButton(
+                                        h,
+                                        large:
+                                            !landscape ||
+                                            viewport.maxWidth >= 640,
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Next track',
+                                        iconSize: 36,
+                                        onPressed: h.skipToNext,
+                                        icon: const Icon(
+                                          Icons.skip_next_rounded,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Repeat: ${h.repeatMode.name}',
+                                        isSelected:
+                                            h.repeatMode !=
+                                            AudioServiceRepeatMode.none,
+                                        onPressed: () => h.setRepeatMode(
+                                          switch (h.repeatMode) {
+                                            AudioServiceRepeatMode.none =>
+                                              AudioServiceRepeatMode.all,
+                                            AudioServiceRepeatMode.all =>
+                                              AudioServiceRepeatMode.one,
+                                            AudioServiceRepeatMode.one =>
+                                              AudioServiceRepeatMode.none,
+                                            _ => AudioServiceRepeatMode.none,
+                                          },
+                                        ),
+                                        icon: Icon(
+                                          h.repeatMode ==
+                                                  AudioServiceRepeatMode.one
+                                              ? Icons.repeat_one
+                                              : Icons.repeat,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                if (h.sleepUntil != null)
+                                  const Text('Sleep timer is on'),
+                              ],
+                            );
+                            double textHeight(
+                              String text,
+                              TextStyle? style,
+                              int maxLines,
+                              double width,
+                            ) {
+                              final painter = TextPainter(
+                                text: TextSpan(
+                                  text: text,
+                                  style: DefaultTextStyle.of(context).style
+                                      .merge(style),
+                                ),
+                                maxLines: maxLines,
+                                textDirection: Directionality.of(context),
+                                textScaler: MediaQuery.textScalerOf(context),
+                              )..layout(maxWidth: width);
+                              final height = painter.height;
+                              painter.dispose();
+                              return height;
+                            }
+
+                            Widget details({
+                              required bool includeArtwork,
+                            }) => Column(
+                              children: [
+                                Expanded(
+                                  child: LayoutBuilder(
+                                    builder: (context, available) {
+                                      final theme = Theme.of(context).textTheme;
+                                      final metadataHeight =
+                                          textHeight(
+                                            t.title,
+                                            theme.headlineSmall?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                            2,
+                                            available.maxWidth,
+                                          ) +
+                                          8 +
+                                          textHeight(
+                                            t.artist,
+                                            theme.titleMedium,
+                                            1,
+                                            available.maxWidth,
+                                          ) +
+                                          48 +
+                                          (t.online
+                                              ? 8 +
+                                                    textHeight(
+                                                      'STREAMING FROM ${t.source.label.toUpperCase()}',
+                                                      const TextStyle(
+                                                        fontSize: 11,
+                                                        letterSpacing: 2,
+                                                      ),
+                                                      2,
+                                                      available.maxWidth,
+                                                    )
+                                              : 0) +
+                                          (t.source == MediaSource.youtube
+                                              ? (textHeight(
+                                                          'Open video in YouTube',
+                                                          theme.labelLarge,
+                                                          2,
+                                                          (available.maxWidth -
+                                                                  56)
+                                                              .clamp(
+                                                                1.0,
+                                                                available
+                                                                    .maxWidth,
+                                                              ),
+                                                        ) +
+                                                        16)
+                                                    .clamp(
+                                                      48.0,
+                                                      double.infinity,
+                                                    )
+                                              : 0);
+                                      final artworkSpace =
+                                          (available.maxHeight -
+                                                  metadataHeight -
+                                                  16)
+                                              .clamp(0.0, 300.0);
+                                      final size = artworkSpace.clamp(
+                                        0.0,
+                                        (available.maxWidth - 32).clamp(
+                                          0.0,
+                                          300.0,
+                                        ),
+                                      );
+                                      return SingleChildScrollView(
+                                        controller: _scroll,
+                                        child: Column(
+                                          children: [
+                                            if (includeArtwork &&
+                                                size >= 48) ...[
+                                              artwork(size),
+                                              const SizedBox(height: 16),
+                                            ],
+                                            metadata(),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                controls(),
+                              ],
+                            );
+                            return Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                8,
+                                horizontalPadding,
+                                12,
                               ),
-                              const SizedBox(height: 24),
-                              if (h.sleepUntil != null)
-                                const Text('Sleep timer is on'),
-                            ],
-                          ),
+                              child: landscape
+                                  ? Row(
+                                      children: [
+                                        Expanded(
+                                          child: LayoutBuilder(
+                                            builder: (context, available) {
+                                              final size = available.maxHeight
+                                                  .clamp(
+                                                    0.0,
+                                                    available.maxWidth,
+                                                  )
+                                                  .clamp(0.0, 300.0);
+                                              return Center(
+                                                child: artwork(size),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 24),
+                                        Expanded(
+                                          child: details(includeArtwork: false),
+                                        ),
+                                      ],
+                                    )
+                                  : details(includeArtwork: true),
+                            );
+                          },
                         ),
                       ),
               ),

@@ -124,6 +124,12 @@ void main() {
       await tester.drag(find.byType(ClipOval).first, const Offset(120, 0));
       await tester.pumpAndSettle();
       expect(find.byType(PlayerScreen), findsOneWidget);
+      // Force metadata to scroll to exercise dismissal away from its top.
+      tester.view.physicalSize = const Size(800, 320);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpAndSettle();
       final scroll = tester.state<ScrollableState>(
         find
             .descendant(
@@ -142,6 +148,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(PlayerScreen), findsOneWidget);
       scroll.position.jumpTo(0);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
       await tester.pumpAndSettle();
       final cancelledClose = await tester.startGesture(
         tester.getCenter(find.byType(ClipOval).first),
