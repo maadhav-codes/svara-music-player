@@ -1,3 +1,5 @@
+import '../lyrics/lyrics_screen.dart';
+
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
@@ -124,6 +126,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (mounted && artId == key) setState(() => accent = scheme);
   }
 
+  void openLyrics(BuildContext context) => Navigator.push(
+    context,
+    MaterialPageRoute<void>(builder: (_) => const LyricsScreen()),
+  );
+
   @override
   Widget build(BuildContext context) {
     final h = ref.watch(handlerProvider);
@@ -145,6 +152,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 ),
                 title: const Text('Now playing'),
                 actions: [
+                  IconButton(
+                    tooltip: 'Lyrics',
+                    onPressed: t == null ? null : () => openLyrics(context),
+                    icon: const Icon(Icons.lyrics_outlined),
+                  ),
                   IconButton(
                     tooltip: 'Sleep timer',
                     onPressed: () async {
@@ -217,28 +229,35 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                 final size =
                                     (MediaQuery.sizeOf(context).width - 80)
                                         .clamp(160.0, 300.0);
-                                return Semantics(
-                                  label:
-                                      'Track progress ${(progress * 100).round()} percent',
-                                  child: SizedBox(
-                                    width: size,
-                                    height: size,
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        SizedBox.expand(
-                                          child: CircularProgressIndicator(
-                                            value: progress,
-                                            strokeWidth: 4,
-                                            backgroundColor: Theme.of(context)
-                                                .colorScheme
-                                                .surfaceContainerHighest,
+                                return GestureDetector(
+                                  onVerticalDragEnd: (details) {
+                                    if ((details.primaryVelocity ?? 0) < -150) {
+                                      openLyrics(context);
+                                    }
+                                  },
+                                  child: Semantics(
+                                    label:
+                                        'Track progress ${(progress * 100).round()} percent. Swipe up for lyrics',
+                                    child: SizedBox(
+                                      width: size,
+                                      height: size,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          SizedBox.expand(
+                                            child: CircularProgressIndicator(
+                                              value: progress,
+                                              strokeWidth: 4,
+                                              backgroundColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest,
+                                            ),
                                           ),
-                                        ),
-                                        ClipOval(
-                                          child: TrackArt(t, size: size - 24),
-                                        ),
-                                      ],
+                                          ClipOval(
+                                            child: TrackArt(t, size: size - 24),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 );

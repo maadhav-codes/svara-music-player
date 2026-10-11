@@ -177,3 +177,7 @@ The live test uses Blender's Big Buck Bunny, plays muted, checks search/paginati
 Pin a reviewed extractor release in `packages/svara_youtube/android/build.gradle`, update notices, and rerun unit tests, the live device check, and a minified release build. The app uses the existing legacy Kotlin Gradle compatibility flags; Flutter warns these will need migration in a future SDK update. Consumer R8 rules retain Rhino classes; minimum API 24 requires NIO core-library desugaring in both app and plugin.
 
 Release APKs are currently **development-signed**, even in release mode. Configure a production signing key before public distribution, preserve that key for upgrades, and publish corresponding app/plugin source, build instructions, and third-party notices alongside your APK. Do not publish cookies, signing keys, signed stream URLs, or music files. Keep local playback usable when extraction is unavailable.
+
+### Synchronized lyrics
+
+Tap **Lyrics** in the full player or swipe up on its artwork. Svara shows line-synchronized LRCLIB lyrics, with tap-to-seek and plain-text fallback. Local `.lrc` sidecars take priority and work offline. On Android 10+, choose the exact song folder once from the lyrics screen to grant access to text sidecars. See [lyrics setup and validation](docs/LYRICS.md) for formats, caching, privacy and Android storage details.

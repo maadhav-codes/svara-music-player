@@ -11,6 +11,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.provider.Settings
+import android.provider.DocumentsContract
+import java.io.File
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -19,6 +21,9 @@ import java.util.concurrent.Executors
 
 class MainActivity : AudioServiceActivity() {
     private val worker = Executors.newSingleThreadExecutor()
+    private var pendingLyrics: MethodChannel.Result? = null
+    private var pendingLyricsFolder: String? = null
+    private val lyricsPreferences by lazy { getSharedPreferences("lyrics_folders", MODE_PRIVATE) }
     private var pendingPermission: MethodChannel.Result? = null
     private val permission: String get() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     private fun allowed() = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
@@ -26,6 +31,28 @@ class MainActivity : AudioServiceActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.svara/media").setMethodCallHandler { call, result ->
             when (call.method) {
+                "chooseLyricsFolder" -> {
+                    if (pendingLyrics != null) result.error("busy", "Folder picker already open.", null)
+                    else {
+                        pendingLyrics = result
+                        pendingLyricsFolder = call.argument<String>("folder") ?: ""
+                        intentLyricsVolume = Uri.parse(call.argument<String>("uri")).pathSegments.firstOrNull()
+                        try {
+                            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                            }, 71)
+                        } catch (_: Exception) {
+                            pendingLyrics = null; pendingLyricsFolder = null
+                            result.error("folder", "Folder picker unavailable.", null)
+                        }
+                    }
+                }
+                "readLocalLyrics" -> worker.execute {
+                    try {
+                        val text = readLocalLyrics(Uri.parse(call.argument<String>("uri")), call.argument<String>("folder") ?: "")
+                        runOnUiThread { result.success(text) }
+                    } catch (_: Exception) { runOnUiThread { result.error("lyrics", "Local lyrics could not be read. Choose the song folder again.", null) } }
+                }
                 "hasPermission" -> result.success(allowed())
                 "requestPermission" -> if (allowed()) result.success(true) else if (pendingPermission != null) result.success(false) else {
                     pendingPermission = result
@@ -73,6 +100,74 @@ class MainActivity : AudioServiceActivity() {
             }
         }
     }
+    // READ_MEDIA_AUDIO does not grant access to text sidecars. On scoped-storage
+    // devices, the user grants this exact song folder through the system picker.
+    private fun readLocalLyrics(audio: Uri, folder: String): String? {
+        if (audio.scheme != "content" || audio.authority != MediaStore.AUTHORITY) return null
+        var name: String? = null
+        var legacyPath: String? = null
+        val columns = mutableListOf(MediaStore.MediaColumns.DISPLAY_NAME)
+        if (Build.VERSION.SDK_INT <= 28) columns.add(MediaStore.Audio.Media.DATA)
+        contentResolver.query(audio, columns.toTypedArray(), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                name = cursor.getString(0)
+                if (Build.VERSION.SDK_INT <= 28) legacyPath = cursor.getString(1)
+            }
+        }
+        val sidecar = name?.substringBeforeLast('.')?.plus(".lrc") ?: return null
+        if (legacyPath != null) {
+            val file = File(File(legacyPath!!).parentFile, sidecar)
+            if (file.isFile) return file.inputStream().use { decodeLyrics(it.readBytesBounded()) }
+        }
+        val saved = lyricsPreferences.getString(folderKey(audio, folder), null) ?: return null
+        val tree = Uri.parse(saved)
+        val parentId = DocumentsContract.getTreeDocumentId(tree)
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
+        contentResolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { cursor ->
+            while (cursor.moveToNext()) {
+                if (cursor.getString(1).equals(sidecar, ignoreCase = true)) {
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0))
+                    return contentResolver.openInputStream(uri)?.use { decodeLyrics(it.readBytesBounded()) }
+                }
+            }
+        }
+        return null
+    }
+    private fun folderKey(audio: Uri, folder: String) = "${audio.pathSegments.firstOrNull()}:$folder"
+    private fun java.io.InputStream.readBytesBounded(): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = read(buffer)
+            if (count < 0) break
+            if (out.size() + count > 256 * 1024) throw IllegalArgumentException("Lyrics file too large")
+            out.write(buffer, 0, count)
+        }
+        return out.toByteArray()
+    }
+    private fun decodeLyrics(bytes: ByteArray): String {
+        val charset = if (bytes.size >= 2 && ((bytes[0] == 0xff.toByte() && bytes[1] == 0xfe.toByte()) || (bytes[0] == 0xfe.toByte() && bytes[1] == 0xff.toByte()))) Charsets.UTF_16 else Charsets.UTF_8
+        return String(bytes, charset)
+    }
+    @Deprecated("Android legacy activity result API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 71) return
+        val result = pendingLyrics
+        pendingLyrics = null
+        val folder = pendingLyricsFolder
+        pendingLyricsFolder = null
+        val tree = data?.data
+        if (resultCode != RESULT_OK || tree == null || folder == null) { result?.success(false); return }
+        try {
+            contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Include volume identity so equal paths on different storage volumes do not collide.
+            val audioVolume = intentLyricsVolume
+            lyricsPreferences.edit().putString("$audioVolume:$folder", tree.toString()).apply()
+            result?.success(true)
+        } catch (_: Exception) { result?.error("folder", "Read access was not granted.", null) }
+    }
+    private var intentLyricsVolume: String? = null
     private fun scan(known: Map<String, Number>, previousVersion: String?): Map<String, Any> {
         val volumes = if (Build.VERSION.SDK_INT >= 29) MediaStore.getExternalVolumeNames(this) else setOf("external")
         val version = if (Build.VERSION.SDK_INT >= 30) volumes.sorted().joinToString(";") { "$it:${MediaStore.getVersion(this, it)}:${MediaStore.getGeneration(this, it)}" } else null
