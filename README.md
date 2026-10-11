@@ -181,3 +181,7 @@ Release APKs are currently **development-signed**, even in release mode. Configu
 ### Synchronized lyrics
 
 Tap **Lyrics** in the full player or swipe up on its artwork. Svara shows line-synchronized LRCLIB lyrics, with tap-to-seek and plain-text fallback. Local `.lrc` sidecars take priority and work offline. On Android 10+, choose the exact song folder once from the lyrics screen to grant access to text sidecars. See [lyrics setup and validation](docs/LYRICS.md) for formats, caching, privacy and Android storage details.
+
+### Mini-player gestures
+
+Swipe left on the mini-player for Next, right for Previous, and up to open the full player. Tapping still opens the player, and the Play/Pause and Next buttons remain available. Previous uses the same behavior as the full-player control: restart after three seconds of playback, otherwise select the previous queue item. Small drags and downward swipes on the mini-player do nothing. Artwork and text follow horizontal drags with resistance and ease back on release; reduced-motion settings disable this movement. A subtle selection haptic fires when a swipe actually selects another queue item. In the full player, swipe down while its content is at the top to close it; scrolling, seeking and the upward lyrics gesture remain available.
