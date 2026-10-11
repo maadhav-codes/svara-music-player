@@ -22,7 +22,11 @@ It is designed for listeners who value **privacy, speed, and clean design**. Sva
 ### 🎧 For Listeners
 
 - **📱 Phone-Storage Library**: Automatically catalogs local audio files (MP3, AAC/M4A, FLAC, WAV, OGG) via native Android MediaStore.
-- **🌐 Discover Independent Music**: Stream publicly accessible trending and searched tracks through the Audius catalog.
+- **🌐 Discover Independent & Online Music**: Stream tracks through the Audius catalog and experimental YouTube discovery.
+- **🎤 Synchronized Lyrics**: Real-time synchronized lyrics via LRCLIB and local `.lrc` file support.
+- **👆 MiniPlayer Swipe Gestures**: Swipe left/right to skip tracks, swipe up to expand to full player, and pull down to dismiss.
+- **📱 Android Home Screen Widget**: Control playback directly from your home screen with Material 3 responsive controls.
+- **🚀 Instant Genre & Trending Feeds**: Jump directly into curated categories (Trending, Top Charts, Chill/Lofi, Workout, Pop, Rock).
 - **🎨 Dynamic Material 3 Design**: Adapts its color palette in real time to match the artwork of the currently playing track. Full support for Dark & Light modes.
 - **⚡ Quick Mix**: A smart one-tap mix that weaves your favorites with songs you haven’t listened to recently.
 - **📂 Flexible Browsing**: Seamlessly filter and browse your library by Songs, Albums, Artists, or Folders.
