@@ -12,6 +12,7 @@ import '../../core/providers.dart';
 import '../../core/track.dart';
 import '../../core/media_source.dart';
 import '../../core/artwork.dart';
+import '../library/library_screen.dart';
 import 'svara_handler.dart';
 
 String timeLabel(Duration value) =>
@@ -652,30 +653,26 @@ class QueueScreen extends ConsumerWidget {
           onReorderItem: (a, b) => h.reorder(a, b > a ? b + 1 : b),
           itemBuilder: (_, i) {
             final t = h.tracks[i];
-            return ListTile(
+            return Row(
               key: ValueKey('$i:${t.id}'),
-              leading: TrackArt(t),
-              title: Text(t.title),
-              subtitle: Text(t.artist),
-              onTap: () => h.skipToQueueItem(i),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Remove from queue',
-                    onPressed: () => h.remove(i),
-                    icon: const Icon(Icons.close),
+              children: [
+                Expanded(
+                  child: SongTile(
+                    t,
+                    onPlay: () => h.skipToQueueItem(i),
+                    onRemove: () => h.remove(i),
+                    removeLabel: 'Remove from queue',
                   ),
-                  ReorderableDragStartListener(
-                    index: i,
-                    child: const SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Icon(Icons.drag_handle),
-                    ),
+                ),
+                ReorderableDragStartListener(
+                  index: i,
+                  child: const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Icon(Icons.drag_handle),
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         ),

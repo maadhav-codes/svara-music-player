@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/track.dart';
+import '../../core/widgets/music_empty_state.dart';
 import '../library/library_screen.dart';
 import 'playlists_repository.dart';
 
@@ -96,7 +97,8 @@ Future<void> addToPlaylist(
 }
 
 class PlaylistsScreen extends ConsumerStatefulWidget {
-  const PlaylistsScreen({super.key});
+  const PlaylistsScreen({this.onLibrary, super.key});
+  final VoidCallback? onLibrary;
   @override
   ConsumerState<PlaylistsScreen> createState() => _PlaylistsScreenState();
 }
@@ -113,6 +115,16 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
   Future<void> load() async {
     final value = await repo.all();
     if (mounted) setState(() => lists = value);
+  }
+
+  Future<void> createPlaylist() async {
+    final name = await playlistName(context);
+    if (name == null || !mounted) return;
+    lists.add(
+      Playlist(DateTime.now().microsecondsSinceEpoch.toString(), name, []),
+    );
+    await repo.save(lists);
+    await load();
   }
 
   @override
@@ -133,19 +145,7 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
               const Text('Personal playlists, saved on your phone.'),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: () async {
-                  final name = await playlistName(context);
-                  if (name == null) return;
-                  lists.add(
-                    Playlist(
-                      DateTime.now().microsecondsSinceEpoch.toString(),
-                      name,
-                      [],
-                    ),
-                  );
-                  await repo.save(lists);
-                  await load();
-                },
+                onPressed: createPlaylist,
                 icon: const Icon(Icons.add),
                 label: const Text('New playlist'),
               ),
@@ -153,9 +153,13 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
           ),
         ),
         if (lists.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(24),
-            child: Text('Use a song’s menu to collect your favorites here.'),
+          MusicEmptyState(
+            title: 'Make room for your favorites',
+            message:
+                'Create a playlist, then add songs from their three-dot menu.',
+            actionLabel: 'Create playlist',
+            onAction: createPlaylist,
+            icon: Icons.queue_music,
           ),
         ...lists.map(
           (p) => ListTile(
@@ -169,7 +173,10 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
             onTap: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute<void>(builder: (_) => PlaylistDetail(p)),
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      PlaylistDetail(p, onLibrary: widget.onLibrary),
+                ),
               );
               await load();
             },
@@ -200,7 +207,8 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
 }
 
 class PlaylistDetail extends ConsumerStatefulWidget {
-  const PlaylistDetail(this.playlist, {super.key});
+  const PlaylistDetail(this.playlist, {this.onLibrary, super.key});
+  final VoidCallback? onLibrary;
   final Playlist playlist;
   @override
   ConsumerState<PlaylistDetail> createState() => _PlaylistDetailState();
@@ -236,39 +244,53 @@ class _PlaylistDetailState extends ConsumerState<PlaylistDetail> {
           ),
         ),
         Expanded(
-          child: ReorderableListView.builder(
-            itemCount: tracks.length,
-            onReorderItem: (a, b) async {
-              setState(
-                () => tracks = moveQueueItem(tracks, a, b > a ? b + 1 : b),
-              );
-              await save();
-            },
-            itemBuilder: (_, i) => Row(
-              key: ValueKey(tracks[i].id),
-              children: [
-                Expanded(
-                  child: SongTile(
-                    tracks[i],
-                    onPlay: () =>
-                        ref.read(handlerProvider).setQueue(tracks, index: i),
+          child: tracks.isEmpty
+              ? SingleChildScrollView(
+                  child: MusicEmptyState(
+                    title: 'Every playlist starts with a song',
+                    message: 'Find music in Library and use Add to Playlist from a song’s menu.',
+                    actionLabel: widget.onLibrary != null
+                        ? 'Browse Library'
+                        : 'Back to playlists',
+                    onAction: () {
+                      Navigator.pop(context);
+                      widget.onLibrary?.call();
+                    },
+                    icon: Icons.playlist_add,
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Remove from playlist',
-                  onPressed: () async {
-                    setState(() => tracks.removeAt(i));
+                )
+              : ReorderableListView.builder(
+                  itemCount: tracks.length,
+                  onReorderItem: (a, b) async {
+                    setState(
+                      () =>
+                          tracks = moveQueueItem(tracks, a, b > a ? b + 1 : b),
+                    );
                     await save();
                   },
-                  icon: const Icon(Icons.remove_circle_outline),
+                  itemBuilder: (_, i) => Row(
+                    key: ValueKey(tracks[i].id),
+                    children: [
+                      Expanded(
+                        child: SongTile(
+                          tracks[i],
+                          removeLabel: 'Remove from playlist',
+                          onRemove: () async {
+                            setState(() => tracks.removeAt(i));
+                            await save();
+                          },
+                          onPlay: () => ref
+                              .read(handlerProvider)
+                              .setQueue(tracks, index: i),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: Icon(Icons.drag_handle),
+                      ),
+                    ],
+                  ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(right: 12),
-                  child: Icon(Icons.drag_handle),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     ),

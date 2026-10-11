@@ -108,9 +108,12 @@ class _HomeState extends ConsumerState<Home> {
     body: IndexedStack(
       index: index,
       children: [
-        const LibraryScreen(),
+        LibraryScreen(onDiscover: () => setState(() => index = 1)),
         if (index == 1) const DiscoveryScreen() else const SizedBox(),
-        if (index == 2) const PlaylistsScreen() else const SizedBox(),
+        if (index == 2)
+          PlaylistsScreen(onLibrary: () => setState(() => index = 0))
+        else
+          const SizedBox(),
       ],
     ),
     bottomNavigationBar: Column(

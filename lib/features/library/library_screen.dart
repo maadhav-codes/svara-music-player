@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../core/track.dart';
 import '../../core/artwork.dart';
+import '../../core/widgets/music_empty_state.dart';
 import '../playlists/playlists_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
-  const LibraryScreen({super.key});
+  const LibraryScreen({this.onDiscover, super.key});
+  final VoidCallback? onDiscover;
   @override
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -17,7 +19,8 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen>
     with WidgetsBindingObserver {
   final List<Track> tracks = [];
-  String query = '', filter = 'Songs', sort = 'Title';
+  final searchController = TextEditingController();
+  String query = '', filter = 'All', sort = 'Title';
   String? group, error;
   bool allowed = false, loading = true, more = true, paging = false;
   @override
@@ -30,6 +33,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    searchController.dispose();
     super.dispose();
   }
 
@@ -144,7 +148,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       onRefresh: refresh,
       child: NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          if (n.metrics.extentAfter < 500) unawaited(loadMore());
+          if (n.metrics.axis == Axis.vertical && n.metrics.extentAfter < 500) {
+            unawaited(loadMore());
+          }
           return false;
         },
         child: CustomScrollView(
@@ -173,6 +179,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     ),
                     const SizedBox(height: 24),
                     TextField(
+                      controller: searchController,
                       decoration: const InputDecoration(
                         hintText: 'Find a song, artist, album…',
                         prefixIcon: Icon(Icons.search),
@@ -201,37 +208,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       label: const Text('Quick Mix'),
                     ),
                     const SizedBox(height: 16),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children:
-                            [
-                                  'Songs',
-                                  'Albums',
-                                  'Artists',
-                                  'Folders',
-                                  'Favorites',
-                                  'Recently played',
-                                ]
-                                .map(
-                                  (name) => Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: Text(name),
-                                      selected: filter == name,
-                                      onSelected: (_) async {
-                                        setState(() {
-                                          filter = name;
-                                          group = null;
-                                        });
-                                        await loadAll();
-                                      },
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                      ),
-                    ),
                     Row(
                       children: [
                         Expanded(
@@ -272,6 +248,53 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 ),
               ),
             ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _FilterHeader(
+                height: 56 + (MediaQuery.textScalerOf(context).scale(14) - 14),
+                child: Material(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 4,
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children:
+                            [
+                                  'All',
+                                  'Songs',
+                                  'Artists',
+                                  'Albums',
+                                  'Favorites',
+                                  'Folders',
+                                  'Recently played',
+                                ]
+                                .map(
+                                  (name) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: Text(name),
+                                      selected: filter == name,
+                                      onSelected: (_) async {
+                                        setState(() {
+                                          filter = name;
+                                          group = null;
+                                        });
+                                        await loadAll();
+                                      },
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             if (!allowed && !loading)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -303,11 +326,32 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   ),
                 ),
               ),
-            if (allowed && !loading && tracks.isEmpty)
-              const SliverFillRemaining(
+            if (allowed &&
+                !loading &&
+                list.isEmpty &&
+                filter != 'Recently played')
+              SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
-                  child: Text('Add music to your phone, then pull to refresh.'),
+                  child: MusicEmptyState(
+                    title: query.isNotEmpty
+                        ? 'No songs found'
+                        : filter == 'Favorites'
+                        ? 'Your favorites start here'
+                        : 'A little quiet here',
+                    message: query.isNotEmpty
+                        ? 'Try another search or explore trending music in Discover.'
+                        : filter == 'Favorites'
+                        ? 'Favorite songs from their three-dot menu, or find a new sound in Discover.'
+                        : 'Add music to your phone or explore trending music in Discover.',
+                    actionLabel: widget.onDiscover != null
+                        ? 'Explore Discover'
+                        : 'Refresh music',
+                    onAction: widget.onDiscover ?? () => refresh(),
+                    icon: query.isNotEmpty
+                        ? Icons.search_rounded
+                        : Icons.library_music_outlined,
+                  ),
                 ),
               ),
             if (filter == 'Recently played')
@@ -326,6 +370,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                               snapshot.data![a.id]!,
                             ),
                           );
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (recent.isEmpty) {
+                      return MusicEmptyState(
+                        title: 'Your listening story starts here',
+                        message:
+                            'Play a song or explore a new sound in Discover.',
+                        actionLabel: widget.onDiscover != null
+                            ? 'Explore Discover'
+                            : 'Show all songs',
+                        onAction:
+                            widget.onDiscover ??
+                            () => setState(() => filter = 'All'),
+                      );
+                    }
                     return Column(
                       children: recent
                           .map(
@@ -379,10 +439,37 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   }
 }
 
+class _FilterHeader extends SliverPersistentHeaderDelegate {
+  _FilterHeader({required this.child, required this.height});
+  final Widget child;
+  final double height;
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => SizedBox.expand(child: child);
+  @override
+  bool shouldRebuild(covariant _FilterHeader oldDelegate) => true;
+}
+
 class SongTile extends ConsumerWidget {
-  const SongTile(this.track, {required this.onPlay, super.key});
+  const SongTile(
+    this.track, {
+    required this.onPlay,
+    this.onViewArtist,
+    this.onRemove,
+    this.removeLabel,
+    super.key,
+  });
   final Track track;
   final VoidCallback onPlay;
+  final VoidCallback? onViewArtist, onRemove;
+  final String? removeLabel;
   @override
   Widget build(BuildContext context, WidgetRef ref) => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
@@ -402,39 +489,161 @@ class SongTile extends ConsumerWidget {
               ),
             ),
           ),
-    trailing: PopupMenuButton<String>(
+    trailing: IconButton(
       tooltip: 'Song options',
-      onSelected: (action) async {
-        if (action == 'favorite') {
-          await ref.read(favoritesProvider.notifier).toggle(track.id);
-        }
-        if (action == 'playlist' && context.mounted) {
-          await addToPlaylist(context, ref, track);
-        }
-        if (action == 'queue' && track.streamable) {
-          final h = ref.read(handlerProvider);
-          final playing = h.player.playing;
-          await h.setQueue(
-            [...h.tracks, track],
-            index: h.activeIndex,
-            position: h.position,
-            start: playing,
-          );
-        }
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          value: 'favorite',
-          child: Text(
-            ref.watch(favoritesProvider).contains(track.id)
-                ? 'Remove favorite'
-                : 'Favorite',
-          ),
-        ),
-        const PopupMenuItem(value: 'playlist', child: Text('Add to playlist')),
-        if (track.streamable)
-          const PopupMenuItem(value: 'queue', child: Text('Add to queue')),
-      ],
+      icon: const Icon(Icons.more_vert),
+      onPressed: () => showTrackOptions(
+        context,
+        ref,
+        track,
+        onViewArtist: onViewArtist,
+        onRemove: onRemove,
+        removeLabel: removeLabel,
+      ),
     ),
   );
+}
+
+Future<void> showTrackOptions(
+  BuildContext context,
+  WidgetRef ref,
+  Track track, {
+  VoidCallback? onViewArtist,
+  VoidCallback? onRemove,
+  String? removeLabel,
+}) async {
+  final favorite = ref.read(favoritesProvider).contains(track.id);
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: TrackArt(track),
+              title: Text(track.title),
+              subtitle: Text(track.artist),
+            ),
+            const Divider(),
+            for (final option in [
+              ('playlist', Icons.playlist_add, 'Add to Playlist'),
+              ('next', Icons.skip_next, 'Play Next'),
+              ('queue', Icons.queue_music, 'Add to Queue'),
+              (
+                'favorite',
+                favorite ? Icons.favorite : Icons.favorite_border,
+                favorite ? 'Unfavorite' : 'Favorite',
+              ),
+              if (onViewArtist != null)
+                ('artist', Icons.person_outline, 'View Artist'),
+              (
+                'info',
+                Icons.info_outline,
+                track.online ? 'Track Info' : 'Track Info / File Details',
+              ),
+              if (onRemove != null)
+                (
+                  'remove',
+                  Icons.remove_circle_outline,
+                  removeLabel ?? 'Remove',
+                ),
+            ])
+              ListTile(
+                leading: Icon(option.$2),
+                title: Text(option.$3),
+                enabled:
+                    track.streamable || !{'next', 'queue'}.contains(option.$1),
+                onTap: () => Navigator.pop(context, option.$1),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (action == null || !context.mounted) return;
+  switch (action) {
+    case 'favorite':
+      await ref.read(favoritesProvider.notifier).toggle(track.id);
+    case 'playlist':
+      await addToPlaylist(context, ref, track);
+    case 'next':
+    case 'queue':
+      final h = ref.read(handlerProvider);
+      final queue = [...h.tracks];
+      final index = h.activeIndex;
+      final at = h.position;
+      final playing = h.player.playing;
+      queue.insert(
+        action == 'next' && queue.isNotEmpty
+            ? (index + 1).clamp(0, queue.length)
+            : queue.length,
+        track,
+      );
+      await h.setQueue(queue, index: index, position: at, start: playing);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(action == 'next' ? 'Playing next' : 'Added to queue'),
+          ),
+        );
+      }
+    case 'artist':
+      onViewArtist?.call();
+    case 'remove':
+      onRemove?.call();
+    case 'info':
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Track Info',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 16),
+                for (final detail in [
+                  ('Title', track.title),
+                  ('Artist', track.artist),
+                  ('Album', track.album.isEmpty ? 'Unknown' : track.album),
+                  (
+                    'Duration',
+                    track.durationMs > 0
+                        ? '${track.durationMs ~/ 60000}:${((track.durationMs ~/ 1000) % 60).toString().padLeft(2, '0')}'
+                        : 'Unknown',
+                  ),
+                  ('Source', track.source.label),
+                  (
+                    'Availability',
+                    track.streamable ? 'Available' : 'Unavailable',
+                  ),
+                  if (!track.online && track.folder.isNotEmpty)
+                    ('Folder', track.folder),
+                  (
+                    track.online ? 'Source URL' : 'File location',
+                    track.sourceUrl,
+                  ),
+                ]) ...[
+                  Text(
+                    detail.$1,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  SelectableText(detail.$2),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+  }
 }

@@ -80,6 +80,20 @@ void main() {
           ),
         );
         await settle();
+        await tester.enterText(find.byType(TextField), 'missing song');
+        await tester.pump(const Duration(milliseconds: 400));
+        await settle();
+        await tester.ensureVisible(find.text('Explore trending music'));
+        await tester.pumpAndSettle();
+        expect(find.text('No songs found'), findsOneWidget);
+        await tester.tap(find.text('Explore trending music'));
+        await settle();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          isEmpty,
+        );
+        await tester.ensureVisible(find.text('YouTube'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('YouTube'));
         await settle();
         expect(calls, 1);
@@ -96,8 +110,10 @@ void main() {
         await settle();
         expect(calls, 3);
         expect(find.text('Second result'), findsOneWidget);
-        await tester.ensureVisible(find.text('Uploader / Open video').first);
-        await tester.tap(find.text('Uploader / Open video').first);
+        await tester.ensureVisible(find.byTooltip('Song options').first);
+        await tester.tap(find.byTooltip('Song options').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('View Artist'));
         await tester.pumpAndSettle();
         expect(find.text('Open video in YouTube'), findsOneWidget);
         expect(tester.takeException(), null);

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../core/media_source.dart';
 import '../../core/track.dart';
+import '../../core/widgets/music_empty_state.dart';
 import '../library/library_screen.dart';
 import 'discovery_category.dart';
 
@@ -18,6 +19,7 @@ class DiscoveryScreen extends ConsumerStatefulWidget {
 
 class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   final List<Track> tracks = [];
+  final searchController = TextEditingController();
   Timer? debounce;
   CancelToken? token;
   String query = '';
@@ -37,6 +39,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   void dispose() {
     debounce?.cancel();
     token?.cancel();
+    searchController.dispose();
     super.dispose();
   }
 
@@ -237,6 +240,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 ),
                 const SizedBox(height: 24),
                 TextField(
+                  controller: searchController,
                   decoration: InputDecoration(
                     prefixIcon: Icon(Icons.search),
                     hintText: 'Search ${source.label}',
@@ -321,31 +325,19 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         }
         if (i <= tracks.length) {
           final t = tracks[i - 1];
-          return Column(
-            children: [
-              SongTile(
-                t,
-                onPlay: () {
-                  final playable = tracks.where((s) => s.streamable).toList();
-                  unawaited(
-                    ref
-                        .read(handlerProvider)
-                        .setQueue(playable, index: playable.indexOf(t)),
-                  );
-                },
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => artist(t),
-                  child: Text(
-                    t.source == MediaSource.youtube
-                        ? 'Uploader / Open video'
-                        : 'About artist',
-                  ),
-                ),
-              ),
-            ],
+          return SongTile(
+            t,
+            onViewArtist: t.source == MediaSource.youtube || t.artistId != null
+                ? () => artist(t)
+                : null,
+            onPlay: () {
+              final playable = tracks.where((s) => s.streamable).toList();
+              unawaited(
+                ref
+                    .read(handlerProvider)
+                    .setQueue(playable, index: playable.indexOf(t)),
+              );
+            },
           );
         }
         return Padding(
@@ -360,12 +352,20 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   child: const Text('Retry'),
                 ),
               if (!loading && error == null && tracks.isEmpty)
-                Text(
-                  source == MediaSource.youtube &&
-                          query.isEmpty &&
-                          category == null
-                      ? 'Choose a category or search YouTube to find music. Phone music remains available offline in Library.'
-                      : 'No tracks found. Try another search.',
+                MusicEmptyState(
+                  title: query.isNotEmpty
+                      ? 'No songs found'
+                      : 'Find your next sound',
+                  message: 'Try another search or explore trending music here in Discover.',
+                  actionLabel: 'Explore trending music',
+                  icon: Icons.search_rounded,
+                  onAction: () {
+                    debounce?.cancel();
+                    searchController.clear();
+                    query = '';
+                    category = DiscoveryCategory.trendingToday;
+                    unawaited(load(reset: true));
+                  },
                 ),
               if (more && !loading && error == null)
                 OutlinedButton(onPressed: load, child: const Text('Load more')),
