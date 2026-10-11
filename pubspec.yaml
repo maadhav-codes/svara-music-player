@@ -2,7 +2,7 @@ name: svara
 description: A private offline music library with Audius and experimental YouTube discovery.
 author: Mayur Dayal <mayurdayal.engineer@gmail.com>
 publish_to: none
-version: 2.1.0+2100
+version: 2.1.1+2101
 environment:
   sdk: '>=3.13.0 <4.0.0'
 dependencies:
