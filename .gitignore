@@ -1,0 +1,52 @@
+# ==============================================================================
+# Svara (.gitignore)
+# ==============================================================================
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Flutter & Dart Ephemeral / Build Artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+build/
+doc/api/
+
+# Android Build & Local Configuration
+android/.gradle/
+.gradle/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.kt
+
+# Keystore & Signing Credentials (Never commit secrets)
+*.jks
+*.keystore
+key.properties
+android/key.properties
+
+# IDE & Editor Files
+.idea/
+android/.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Local Device Measurement Outputs
+docs/device-measurements/
