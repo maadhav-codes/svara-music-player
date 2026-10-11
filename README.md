@@ -185,3 +185,9 @@ Tap **Lyrics** in the full player or swipe up on its artwork. Svara shows line-s
 ### Mini-player gestures
 
 Swipe left on the mini-player for Next, right for Previous, and up to open the full player. Tapping still opens the player, and the Play/Pause and Next buttons remain available. Previous uses the same behavior as the full-player control: restart after three seconds of playback, otherwise select the previous queue item. Small drags and downward swipes on the mini-player do nothing. Artwork and text follow horizontal drags with resistance and ease back on release; reduced-motion settings disable this movement. A subtle selection haptic fires when a swipe actually selects another queue item. In the full player, swipe down while its content is at the top to close it; scrolling, seeking and the upward lyrics gesture remain available.
+
+### Discover categories
+
+When search is empty, tap **Trending Today**, **Top Charts**, **Chill / Lofi**, **Workout**, **Pop**, or **Rock** to explore without typing. Chips stay visible while results load in one horizontally scrollable row, including with larger text. Audius starts with Trending Today selected; the provider and actual time range appear in a subtle sub-header. Typing returns to normal search; clearing the field restores browse suggestions. Category selection follows source switching, refresh, retry and pagination.
+
+Audius uses genre-filtered weekly trending for Lo-Fi, Pop and Rock, and a music search for Workout. Its Trending Today shortcut shows weekly trending and Top Charts shows monthly trending, with the actual range labeled below the heading; these are Audius rankings rather than global daily charts. YouTube categories launch labeled suggested music searches. Provider ranges and genre filters follow the [official Audius documentation](https://docs.audius.co/sdk/tracks/).

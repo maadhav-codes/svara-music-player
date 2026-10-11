@@ -8,6 +8,7 @@ import '../../core/providers.dart';
 import '../../core/media_source.dart';
 import '../../core/track.dart';
 import '../library/library_screen.dart';
+import 'discovery_category.dart';
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
@@ -20,6 +21,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   Timer? debounce;
   CancelToken? token;
   String query = '';
+  DiscoveryCategory? category = DiscoveryCategory.trendingToday;
   String? error;
   bool loading = false, more = true;
   int generation = 0;
@@ -57,17 +59,28 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       final List<Track> page;
       String? nextContinuation;
       bool hasMore;
+      final preset = query.isEmpty ? category : null;
       if (source == MediaSource.youtube) {
         final data = await ref
             .read(youtubeProvider)
-            .search(query, continuation: continuation, cancel: token);
+            .search(
+              query.isNotEmpty ? query : preset?.youtubeQuery ?? '',
+              continuation: continuation,
+              cancel: token,
+            );
         page = data.tracks;
         nextContinuation = data.continuation;
         hasMore = data.continuation != null;
       } else {
         page = await ref
             .read(audiusProvider)
-            .tracks(query: query, offset: tracks.length, cancel: token);
+            .tracks(
+              query: query.isNotEmpty ? query : preset?.audiusQuery ?? '',
+              genre: preset?.genre,
+              time: preset?.time,
+              offset: tracks.length,
+              cancel: token,
+            );
         hasMore = page.length == 30;
       }
       if (mounted && generation == version) {
@@ -214,6 +227,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   onSelectionChanged: (value) {
                     debounce?.cancel();
                     source = value.single;
+                    if (query.isEmpty &&
+                        category == null &&
+                        source == MediaSource.audius) {
+                      category = DiscoveryCategory.trendingToday;
+                    }
                     unawaited(load(reset: true));
                   },
                 ),
@@ -228,6 +246,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                     token?.cancel();
                     generation++;
                     query = value.trim();
+                    category = query.isEmpty && source == MediaSource.audius
+                        ? DiscoveryCategory.trendingToday
+                        : null;
                     setState(() {
                       loading = false;
                       tracks.clear();
@@ -240,13 +261,60 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                     );
                   },
                 ),
+                if (query.isEmpty) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Find your next sound',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    key: const ValueKey('discovery-categories'),
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: DiscoveryCategory.values
+                          .map(
+                            (choice) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(choice.label),
+                                selected: category == choice,
+                                onSelected: (selected) {
+                                  debounce?.cancel();
+                                  category = selected
+                                      ? choice
+                                      : source == MediaSource.audius
+                                      ? DiscoveryCategory.trendingToday
+                                      : null;
+                                  unawaited(load(reset: true));
+                                },
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Text(
-                  query.isEmpty && source == MediaSource.audius
+                  query.isEmpty && category != null
+                      ? category!.label
+                      : query.isEmpty && source == MediaSource.audius
                       ? 'Trending this week'
                       : 'Search results',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
+                if (query.isEmpty && category != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    source == MediaSource.audius
+                        ? category!.audiusDescription
+                        : 'Suggested music search on YouTube',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ],
             ),
           );
@@ -293,8 +361,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 ),
               if (!loading && error == null && tracks.isEmpty)
                 Text(
-                  source == MediaSource.youtube && query.isEmpty
-                      ? 'Search YouTube to find videos. Phone music remains available offline in Library.'
+                  source == MediaSource.youtube &&
+                          query.isEmpty &&
+                          category == null
+                      ? 'Choose a category or search YouTube to find music. Phone music remains available offline in Library.'
                       : 'No tracks found. Try another search.',
                 ),
               if (more && !loading && error == null)

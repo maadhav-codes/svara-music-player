@@ -102,12 +102,20 @@ class AudiusRepository {
 
   Future<List<Track>> tracks({
     String query = '',
+    String? genre,
+    String? time,
     int offset = 0,
     CancelToken? cancel,
   }) async {
     final data = await get(
       query.isEmpty ? '/v1/tracks/trending' : '/v1/tracks/search',
-      {'limit': 30, 'offset': offset, if (query.isNotEmpty) 'query': query},
+      {
+        'limit': 30,
+        'offset': offset,
+        if (query.isNotEmpty) 'query': query,
+        if (query.isEmpty && genre != null) 'genre': genre,
+        if (query.isEmpty) 'time': time ?? 'week',
+      },
       cancel: cancel,
     );
     return (data as List)
