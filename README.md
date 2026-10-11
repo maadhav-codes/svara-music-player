@@ -156,6 +156,8 @@ Outputs are located in:
 
 Discover has an Audius / YouTube selector. YouTube search is debounced and paginated; results identify the uploader and offer a canonical YouTube link. Settings can disable this source and select Data saver, Standard, or High audio quality. Disabling YouTube stops active YouTube playback while preserving the queue.
 
+YouTube discovery searches the YouTube Music song catalog. Broad queries gain a `music` suffix without changing the text in the search field. Results exclude live streams, unknown durations, clips under 45 seconds, tracks over 20 minutes, and titles indicating gameplay, reactions, reviews, tutorials, podcasts, trailers, or other non-music content. Explicit mix/album/compilation/concert/DJ-set searches use YouTube Music video results and may include uploads up to four hours when their titles also indicate long-form music. Topic/VEVO uploads and official audio receive preference within each page. These are metadata heuristics; they cannot detect spoken intros or guarantee that every result contains only music. Filtering may leave a page empty while its Load more button still offers additional results. Old generic-video search cache entries are excluded.
+
 The local Flutter plugin at `packages/svara_youtube` registers on every engine, including the background service engine. It pins **NewPipeExtractor v0.26.5**, **OkHttp 4.12.0**, and **desugar_jdk_libs_nio 2.1.5**. Gradle needs internet access to Maven repositories and JitPack. No YouTube API key, private credentials, Python, Deno, or hosting server is required by this implementation. Network/parser work runs on two native workers with a bounded queue and cancellation/deadlines; transient requests retry at most twice.
 
 `Track.source` distinguishes local, Audius, and YouTube references. Existing local/Audius records are read without changing their IDs. One audio player receives only the current resolved stream. The handler owns shuffle, repeat, navigation, and queue edits. Each online selection is resolved at playback time; signed URLs and headers are never persisted. YouTube titles/uploader labels from user-selected queues and playlists are saved for identification, with current metadata refreshed on playback. Audius saved records retain reference-only placeholders. Search/artwork caches remain bounded and session-only.
@@ -174,7 +176,7 @@ flutter test integration_test/youtube_device_test.dart -d DEVICE_ID
 flutter test integration_test/youtube_device_test.dart -d DEVICE_ID --dart-define=BACKGROUND_SECONDS=15
 ```
 
-The live test uses Blender's Big Buck Bunny, plays muted, checks search/pagination, audio decoding, seeking, queue serialization, and progression. It is excluded from normal unit-test CI. For background verification, send HOME during `BACKGROUND_READY`, then check that the test completes. Afterward rebuild/install the regular app: the test APK is a harness, not the normal UI.
+The live test uses Kevin MacLeod music for search/pagination and Blender's Big Buck Bunny as a separate muted playback fixture for audio decoding, seeking, queue serialization, and progression. It is excluded from normal unit-test CI. For background verification, send HOME during `BACKGROUND_READY`, then check that the test completes. Afterward rebuild/install the regular app: the test APK is a harness, not the normal UI.
 
 ### Updating and distributing
 

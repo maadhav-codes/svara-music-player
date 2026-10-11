@@ -267,14 +267,18 @@ void main() {
         expect(queries.last, 'pop music');
         await tester.pump(const Duration(milliseconds: 200));
         await settle();
-        expect(queries.last, 'custom');
+        expect(queries.last, 'custom music');
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'custom',
+        );
         await tester.enterText(find.byType(TextField), '');
         await tester.pump(const Duration(milliseconds: 400));
         await settle();
         expect(find.byType(ChoiceChip), findsNWidgets(6));
         expect(
           queries.last,
-          'custom',
+          'custom music',
         ); // Empty YouTube browse does not run a hidden search.
         await tester.tap(find.text('Audius'));
         await settle();

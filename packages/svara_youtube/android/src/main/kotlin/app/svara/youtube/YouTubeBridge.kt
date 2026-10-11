@@ -14,6 +14,7 @@ import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.exceptions.*
 import org.schabi.newpipe.extractor.search.SearchInfo
+import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.stream.*
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -127,7 +128,11 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
     private fun search(call: MethodCall): Map<String, Any?> {
         val query = call.argument<String>("query")?.trim() ?: ""
         require(query.isNotEmpty() && query.length <= 300)
-        val handler = ServiceList.YouTube.searchQHFactory.fromQuery(query, listOf("videos"), "")
+        // Songs uses YouTube Music's catalog, rather than general video results.
+        // Continuous mixes/album uploads are exposed by its music-video search.
+        val filter = if (MusicSearchPolicy.allowsLongMusic(query))
+            YoutubeSearchQueryHandlerFactory.MUSIC_VIDEOS else YoutubeSearchQueryHandlerFactory.MUSIC_SONGS
+        val handler = ServiceList.YouTube.searchQHFactory.fromQuery(query, listOf(filter), "")
         val token = call.argument<String>("continuation")
         val items: List<org.schabi.newpipe.extractor.InfoItem>
         val next: Page?
@@ -142,7 +147,10 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
             if (data.items.isEmpty() && data.errors.isNotEmpty()) throw ExtractionException("Search extraction failed", data.errors.first())
             items = data.items; next = data.nextPage
         }
-        val tracks = items.filterIsInstance<StreamInfoItem>().take(50).mapNotNull { item ->
+        val tracks = items.filterIsInstance<StreamInfoItem>()
+            .filter { it.streamType == StreamType.VIDEO_STREAM &&
+                MusicSearchPolicy.accepts(query, it.name, it.duration) }
+            .take(50).mapNotNull { item ->
             val id = try { ServiceList.YouTube.streamLHFactory.getId(item.url) } catch (_: Exception) { return@mapNotNull null }
             mapOf("videoId" to id, "title" to item.name, "uploader" to item.uploaderName,
                 "uploaderUrl" to item.uploaderUrl, "durationMs" to maxOf(0, item.duration) * 1000,

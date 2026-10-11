@@ -158,6 +158,30 @@ class YouTubeRepository {
     _ => 'Cannot reach YouTube. Retry or choose phone music in Library.',
   };
 
+  static final _musicTerms = RegExp(
+    r'\b(music|songs?|audio|ost|soundtracks?|tracks?|lyrics?|instrumental|remix|mix(?:es)?|albums?|compilation|concert|dj|score)\b',
+    caseSensitive: false,
+  );
+  static final _preferredUploader = RegExp(
+    r'(?:-\s*topic|vevo)\s*$',
+    caseSensitive: false,
+  );
+  static final _officialAudio = RegExp(
+    r'\bofficial\s+audio\b',
+    caseSensitive: false,
+  );
+
+  String _musicQuery(String query) =>
+      _musicTerms.hasMatch(query) || query.length > 294
+      ? query
+      : '$query music';
+
+  int _musicPriority(Track track) => _preferredUploader.hasMatch(track.artist)
+      ? 0
+      : _officialAudio.hasMatch(track.title)
+      ? 1
+      : 2;
+
   Future<YouTubePage> search(
     String query, {
     String? continuation,
@@ -171,22 +195,33 @@ class YouTubeRepository {
     }
     query = query.trim();
     if (query.isEmpty) return const YouTubePage([], null);
-    final key = 'youtube:search:$query:${continuation ?? ''}';
+    if (query.length > 300) {
+      throw const SourceException(
+        'invalid',
+        'Please use a shorter music search.',
+      );
+    }
+    final musicQuery = _musicQuery(query);
+    // Keep generic-video cache entries and their native page tokens out of the
+    // music catalog. Use the same effective query on every continuation page.
+    final key = 'youtube:music-search:v1:$musicQuery:${continuation ?? ''}';
     var data = await store.cached(key) as Map?;
     if (cancel?.isCancelled ?? false) throw cancel!.cancelError!;
     if (data == null) {
       data = await _call('search', {
-        'query': query,
+        'query': musicQuery,
         'continuation': continuation,
       }, cancel: cancel);
       await store.cache(key, data, ttl: const Duration(minutes: 15));
     }
-    return YouTubePage(
-      (data['tracks'] as List)
-          .map((t) => _track(Map<String, dynamic>.from(t as Map)))
-          .toList(),
-      data['continuation'] as String?,
-    );
+    final tracks = (data['tracks'] as List)
+        .map((t) => _track(Map<String, dynamic>.from(t as Map)))
+        .toList();
+    // Stable preference: preserve upstream relevance within each tier.
+    return YouTubePage([
+      for (var priority = 0; priority < 3; priority++)
+        ...tracks.where((track) => _musicPriority(track) == priority),
+    ], data['continuation'] as String?);
   }
 
   Future<Track> metadata(Track reference, {CancelToken? cancel}) async {

@@ -70,6 +70,108 @@ void main() {
     },
   );
 
+  test('broad queries gain music context without changing music searches or pagination', () async {
+    final sent = <Map>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      sent.add(call.arguments as Map);
+      return {
+        'tracks': [dto],
+        'continuation': 'next',
+      };
+    });
+    for (final entry in {
+      'Star Wars': 'Star Wars music',
+      'Batman': 'Batman music',
+      'Coldplay': 'Coldplay music',
+      'Dune OST': 'Dune OST',
+      'song lyrics': 'song lyrics',
+      'lofi mix': 'lofi mix',
+      'full album': 'full album',
+      'DJ set': 'DJ set',
+      'official AUDIO': 'official AUDIO',
+      'musical theatre': 'musical theatre music',
+    }.entries) {
+      final first = await repo.search(entry.key);
+      expect(sent.last['query'], entry.value);
+      await repo.search(entry.key, continuation: first.continuation);
+      expect(sent.last['query'], entry.value);
+      expect(sent.last['continuation'], 'next');
+    }
+    final before = sent.length;
+    expect((await repo.search('  ')).tracks, isEmpty);
+    expect(sent.length, before);
+    await expectLater(repo.search('x' * 301), throwsA(isA<SourceException>()));
+    await repo.search('x' * 300);
+    expect((sent.last['query'] as String).length, 300);
+  });
+
+  test(
+    'music search bypasses old generic cache and stably favors audio uploads',
+    () async {
+      await store.cache('youtube:search:Batman:', {
+        'tracks': [dto],
+        'continuation': 'old-video-page',
+      });
+      var calls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls++;
+        expect((call.arguments as Map)['query'], 'Batman music');
+        return {
+          'tracks': [
+            {...dto, 'videoId': 'aaaaaaaaaaa', 'uploader': 'Other artist'},
+            {...dto, 'videoId': 'bbbbbbbbbbb', 'uploader': 'Composer - Topic'},
+            {...dto, 'videoId': 'ccccccccccc', 'uploader': 'ArtistVEVO'},
+            {
+              ...dto,
+              'videoId': 'ddddddddddd',
+              'title': 'Theme (Official Audio)',
+            },
+            {...dto, 'videoId': 'eeeeeeeeeee', 'uploader': 'Another artist'},
+          ],
+          'continuation': 'music-page',
+        };
+      });
+      final first = await repo.search('Batman');
+      expect(first.tracks.map((t) => t.providerId), [
+        'bbbbbbbbbbb',
+        'ccccccccccc',
+        'ddddddddddd',
+        'aaaaaaaaaaa',
+        'eeeeeeeeeee',
+      ]);
+      expect(first.continuation, 'music-page');
+      final cached = await repo.search('Batman');
+      expect(cached.tracks.map((t) => t.id), first.tracks.map((t) => t.id));
+      expect(calls, 1);
+    },
+  );
+
+  test(
+    'empty filtered pages retain their continuation for further music results',
+    () async {
+      messenger.setMockMethodCallHandler(
+        channel,
+        (call) async => {
+          'tracks': (call.arguments as Map)['continuation'] == null
+              ? []
+              : [dto],
+          'continuation': (call.arguments as Map)['continuation'] == null
+              ? 'next-music-page'
+              : null,
+        },
+      );
+      final first = await repo.search('Batman');
+      expect(first.tracks, isEmpty);
+      expect(first.continuation, 'next-music-page');
+      final second = await repo.search(
+        'Batman',
+        continuation: first.continuation,
+      );
+      expect(second.tracks, hasLength(1));
+      expect(second.continuation, isNull);
+    },
+  );
+
   test(
     'resolved signed URL and headers stay out of serialized playlists',
     () async {

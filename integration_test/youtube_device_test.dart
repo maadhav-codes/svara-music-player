@@ -63,14 +63,26 @@ void main() {
         );
         expect(resolved.track.durationMs, greaterThan(0));
         expect(resolved.stream.uri.scheme, 'https');
-        final page = await youtube.search('Big Buck Bunny Blender');
+        final page = await youtube.search('Kevin MacLeod music');
         expect(page.tracks, isNotEmpty);
+        expect(
+          page.tracks.every(
+            (t) => t.durationMs >= 45000 && t.durationMs <= 1200000,
+          ),
+          isTrue,
+        );
         if (page.continuation != null) {
           final next = await youtube.search(
-            'Big Buck Bunny Blender',
+            'Kevin MacLeod music',
             continuation: page.continuation,
           );
-          expect(next.tracks, isNotEmpty);
+          // Filtering may legitimately leave a page empty with more pages available.
+          expect(
+            next.tracks.every(
+              (t) => t.durationMs >= 45000 && t.durationMs <= 1200000,
+            ),
+            isTrue,
+          );
         }
         watch.reset();
         await handler.setQueue([reference]);
