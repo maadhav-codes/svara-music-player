@@ -124,13 +124,36 @@ void main() {
       expect(tester.takeException(), null);
       final render =
           boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      await tester.runAsync(() async {
-        final image = await render.toImage(pixelRatio: 2);
-        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        await File('docs/library-preview.png')
-            .writeAsBytes(bytes!.buffer.asUint8List());
-        image.dispose();
-      });
+      Future<void> captureThemes(String screen) async {
+        final container = ProviderScope.containerOf(boundary.currentContext!);
+        for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+          await tester.runAsync(
+            () => container.read(themeProvider.notifier).set(mode),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$screen ${mode.name}',
+          );
+          await tester.runAsync(() async {
+            final image = await render.toImage(pixelRatio: 2);
+            final bytes = await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            final suffix = mode == ThemeMode.light ? '' : '-dark';
+            await File('docs/$screen-preview$suffix.png')
+                .writeAsBytes(bytes!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        await tester.runAsync(
+          () => container.read(themeProvider.notifier).set(ThemeMode.light),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await captureThemes('library');
       await tester.runAsync(() async {
         await handler.setQueue(songs, index: 0, start: false);
       });
@@ -139,13 +162,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Now playing'), findsOneWidget);
       expect(tester.takeException(), null);
-      await tester.runAsync(() async {
-        final image = await render.toImage(pixelRatio: 2);
-        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        await File('docs/player-preview.png')
-            .writeAsBytes(bytes!.buffer.asUint8List());
-        image.dispose();
-      });
+      await captureThemes('player');
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       await tester.pumpAndSettle();
       expect(tester.takeException(), null);

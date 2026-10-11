@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/providers.dart';
+import 'core/theme.dart';
 import 'features/library/library_screen.dart';
 import 'features/discovery/discovery_screen.dart';
 import 'features/playlists/playlists_screen.dart';
@@ -17,32 +18,9 @@ class SvaraApp extends ConsumerWidget {
     title: 'Svara',
     debugShowCheckedModeBanner: false,
     themeMode: ref.watch(themeProvider),
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: SvaraTheme.build(Brightness.light),
+    darkTheme: SvaraTheme.build(Brightness.dark),
     home: const Home(),
-  );
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    useMaterial3: true,
-    fontFamily: 'Roboto',
-    brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xff21594b),
-      brightness: brightness,
-    ),
-    scaffoldBackgroundColor: brightness == Brightness.light
-        ? const Color(0xfff6f4ee)
-        : const Color(0xff101714),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      centerTitle: false,
-    ),
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(20)),
-      ),
-    ),
-    visualDensity: VisualDensity.standard,
   );
 }
 

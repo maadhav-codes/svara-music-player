@@ -267,8 +267,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         final t = active(h);
         if (t != null && artId != artworkKey(t)) unawaited(derive(t));
         return Theme(
-          data: Theme.of(context)
-              .copyWith(colorScheme: accent ?? Theme.of(context).colorScheme),
+          data: Theme.of(context),
           child: Builder(
             builder: (context) => _PlayerDismissGesture(
               scroll: _scroll,
@@ -379,6 +378,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                             child: CircularProgressIndicator(
                                               value: progress,
                                               strokeWidth: 4,
+                                              color: accent?.primary,
                                               backgroundColor: Theme.of(context)
                                                   .colorScheme
                                                   .surfaceContainerHighest,
@@ -507,6 +507,14 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                             ? Icons.favorite
                                             : Icons.favorite_border,
                                       ),
+                                      color:
+                                          ref
+                                              .watch(favoritesProvider)
+                                              .contains(t.id)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                          : null,
                                     ),
                                     IconButton(
                                       tooltip: 'Add to playlist',

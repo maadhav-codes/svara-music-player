@@ -4,9 +4,13 @@ An Android music player for your phone’s music, with Audius streaming and expe
 
 Svara (स्वर) means “musical note” or “voice.” The app has no ads, required accounts, subscriptions, or analytics. Local playback works offline; discovery and online lyrics require an internet connection.
 
-|                                      Library                                       |                                   Now playing                                   |
-| :--------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------: |
-| <img src="docs/library-preview.png" width="300" alt="Svara local music library" /> | <img src="docs/player-preview.png" width="300" alt="Svara full music player" /> |
+| Library · Light | Library · Dark |
+| :---: | :---: |
+| <img src="docs/library-preview.png" width="300" alt="Svara local music library in light mode" /> | <img src="docs/library-preview-dark.png" width="300" alt="Svara local music library in dark mode" /> |
+
+| Now playing · Light | Now playing · Dark |
+| :---: | :---: |
+| <img src="docs/player-preview.png" width="300" alt="Svara full music player in light mode" /> | <img src="docs/player-preview-dark.png" width="300" alt="Svara full music player in dark mode" /> |
 
 ## Start here
 
@@ -26,7 +30,7 @@ Svara (स्वर) means “musical note” or “voice.” The app has no ads
 - Displays synchronized lyrics, plain-text lyrics, and local `.lrc` files.
 - Includes light, dark, and system themes, plus a 15-, 30-, 45-, or 60-minute sleep timer.
 
-**Current scope:** Android only. The repository does not include iOS, web, or desktop app targets, a home-screen widget, or an offline download feature for online music. The app uses a fixed Material 3 color palette rather than colors extracted from artwork.
+**Current scope:** Android only. The repository does not include iOS, web, or desktop app targets, a home-screen widget, or an offline download feature for online music. Light mode uses warm ivory surfaces and burnt-orange accents; dark mode uses charcoal surfaces and soft copper accents. Player artwork can tint its progress ring while the app’s navigation and controls keep a consistent palette. Theme colors and component styles are defined in `lib/core/theme.dart`. See [theme design and validation](docs/THEME.md) for the rationale and contrast checks.
 
 ## Install the app
 
