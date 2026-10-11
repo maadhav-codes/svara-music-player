@@ -1,207 +1,296 @@
-# Svara 🎵
+# Svara
 
-> **A minimal, private offline music library with Audius and experimental YouTube discovery.**
-> No ads • No accounts • No tracking • No subscriptions • 100% Free & Open Source
+An Android music player for your phone’s music, with Audius streaming and experimental YouTube discovery. Built with Flutter and Material 3.
 
----
+Svara (स्वर) means “musical note” or “voice.” The app has no ads, required accounts, subscriptions, or analytics. Local playback works offline; discovery and online lyrics require an internet connection.
 
-## 📖 Overview
+|                                      Library                                       |                                   Now playing                                   |
+| :--------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------: |
+| <img src="docs/library-preview.png" width="300" alt="Svara local music library" /> | <img src="docs/player-preview.png" width="300" alt="Svara full music player" /> |
 
-**Svara** (Sanskrit: _स्वर_, meaning _musical note_ or _voice_) is a lightweight, modern Android music player built with **Flutter & Material 3**.
+## Start here
 
-It is designed for listeners who value **privacy, speed, and clean design**. Svara plays the music stored on your device and connects to **Audius** to let you explore fresh, streamable independent music—without telemetry or mandatory accounts. Online requests still reach the selected provider.
+- **Listeners:** [Install the app](#install-the-app), then follow [Using Svara](#using-svara).
+- **Developers:** Follow [Development setup](#development-setup), then [Checks and tests](#checks-and-tests).
+- **Having trouble?** See [Troubleshooting](#troubleshooting).
+- **Preparing a release?** See [Build-and-release instructions](#build-and-release-instructions).
 
-|                                **Library View**                                 |                                **Now Playing**                                |
-| :-----------------------------------------------------------------------------: | :---------------------------------------------------------------------------: |
-| <img src="docs/library-preview.png" width="300" alt="Library Screen Preview" /> | <img src="docs/player-preview.png" width="300" alt="Player Screen Preview" /> |
+## What the app does
 
----
+- Finds audio indexed by Android’s MediaStore and browses it by album, artist, or folder, with search, favorites, and recently played filters.
+- Plays local audio through Android’s supported decoders. Common formats include MP3, AAC/M4A, FLAC, WAV, and OGG; compatibility depends on the device and file encoding.
+- Offers **Quick Mix**, combining local favorites with less recently played local tracks.
+- Searches and streams Audius tracks and experimental YouTube music results.
+- Saves playlists and supports Play Next, Add to Queue, queue reordering, shuffle, and repeat.
+- Supports background playback, media notification controls, audio interruption handling, and pausing when headphones disconnect.
+- Displays synchronized lyrics, plain-text lyrics, and local `.lrc` files.
+- Includes light, dark, and system themes, plus a 15-, 30-, 45-, or 60-minute sleep timer.
 
-## ✨ Features
+**Current scope:** Android only. The repository does not include iOS, web, or desktop app targets, a home-screen widget, or an offline download feature for online music. The app uses a fixed Material 3 color palette rather than colors extracted from artwork.
 
-### 🎧 For Listeners
+## Install the app
 
-- **📱 Phone-Storage Library**: Automatically catalogs local audio files (MP3, AAC/M4A, FLAC, WAV, OGG) via native Android MediaStore.
-- **🌐 Discover Independent & Online Music**: Stream tracks through the Audius catalog and experimental YouTube discovery.
-- **🎤 Synchronized Lyrics**: Real-time synchronized lyrics via LRCLIB and local `.lrc` file support.
-- **👆 MiniPlayer Swipe Gestures**: Swipe left/right to skip tracks, swipe up to expand to full player, and pull down to dismiss.
-- **📱 Android Home Screen Widget**: Control playback directly from your home screen with Material 3 responsive controls.
-- **🚀 Instant Genre & Trending Feeds**: Jump directly into curated categories (Trending, Top Charts, Chill/Lofi, Workout, Pop, Rock).
-- **🎨 Dynamic Material 3 Design**: Adapts its color palette in real time to match the artwork of the currently playing track. Full support for Dark & Light modes.
-- **⚡ Quick Mix**: A smart one-tap mix that weaves your favorites with songs you haven’t listened to recently.
-- **📂 Flexible Browsing**: Seamlessly filter and browse your library by Songs, Albums, Artists, or Folders.
-- **📜 Personal Playlists & Queue**: Build custom playlists, reorder songs on the fly with drag-and-drop, and manage playback queues effortlessly.
-- **⏱️ Sleep Timer**: Fall asleep to your music with automatic shutdown timers (15, 30, 45, or 60 minutes).
-- **🎛️ Audio Focus & Safety**: Automatically pauses when headphones or Bluetooth disconnect. Gently ducks volume during incoming notifications.
-- **🔒 Private by Design**: Everything (listening history, favorites, playlists) stays strictly on your phone. No telemetry, no background analytics, no ads.
+Use an APK supplied by a trusted maintainer, or [build one from source](#build-and-release-instructions). The repository’s [Releases page](https://github.com/maadhav-codes/svara-music-player/releases) is the place to check for published builds.
 
----
+1. Use a device running **Android 7.0 or later (API 24+)** for the documented Flutter 3.47.7 build.
+2. Open the APK on your phone. If Android asks, allow the app opening the file to install unknown apps, then complete installation.
+3. Open **Svara → Library → Allow music access / Retry** and grant audio access.
+4. Tap a song to play it. Use **Discover** for online music and **Playlists** for saved collections.
 
-## 🚀 Quick Start (Developers)
+For separate architecture APKs, `arm64-v8a` is the usual choice for modern phones; `armeabi-v7a` is for older 32-bit ARM devices, and `x86_64` is commonly used by Android emulators. A universal APK includes all supported architectures.
 
-### 1. Prerequisites
+To keep playlists and settings during updates, install an APK with the same application ID (`app.svara`) and signing key and an appropriate version code. Uninstalling or clearing app data removes Svara’s saved data; Android cloud backup is disabled.
 
-- **Flutter**: 3.47.7 stable or newer (Dart 3.13+)
-- **JDK**: JDK 21 (recommended: Eclipse Temurin 21)
-- **Android SDK**: Compile / Target **API 36**, Minimum **API 24** (Android 7.0+)
+## Using Svara
 
-### 2. Clone & Run
+### Your local library
+
+Copy music onto your phone using a file manager or USB transfer. Svara reads Android’s media index rather than importing files into a separate music folder. Return to **Library**, pull to refresh, or use its refresh button after adding or changing music.
+
+Use the filter chips to browse your library, then search or sort the results. Tap **Quick Mix** to start a mix of local tracks. Open a song’s **⋮ Song options** menu to favorite it, add it to a playlist, play it next, add it to the queue, or view file details.
+
+### Playback and gestures
+
+Tap the mini-player to open the full player. The full player provides seeking, previous/next, shuffle, repeat, queue controls, lyrics, and a sleep timer.
+
+| Gesture                                                       | Action                                                                       |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Swipe left on the mini-player                                 | Next track                                                                   |
+| Swipe right on the mini-player                                | Previous track, or restart the current track after three seconds of playback |
+| Swipe up on the mini-player                                   | Open the full player                                                         |
+| Swipe down in the full player while its content is at the top | Close the full player                                                        |
+| Swipe up on full-player artwork                               | Open lyrics                                                                  |
+
+Downward swipes on the mini-player do nothing. You can also use its Play/Pause and Next buttons. Set a sleep timer from the full player’s **Sleep timer** button; choose **Turn off** to cancel it.
+
+### Playlists
+
+Open a song’s options and choose **Add to Playlist**. Select an existing playlist or choose **New playlist**, enter a name, and save it. Open the **Playlists** tab to play and manage collections, including reordering their tracks.
+
+Saving an online track saves a reference, not an audio file. It still needs internet access and must remain available from its provider.
+
+### Discover online music
+
+Open **Discover** and select **Audius** or **YouTube**. Type a search, or use **Trending Today**, **Top Charts**, **Chill / Lofi**, **Workout**, **Pop**, or **Rock**. Use **Load more** when additional results are available.
+
+Category labels describe shortcuts, not global charts. Audius’s Trending Today uses weekly trending, Top Charts uses monthly trending, and Chill / Lofi, Pop, and Rock use weekly genre rankings. Workout uses search. YouTube categories run suggested music searches. The screen labels the provider and relevant range.
+
+In **Settings → Streaming & Discovery**, you can disable YouTube or choose its audio quality: **Data saver (64 kbps)**, **Standard (128 kbps)**, or **High (256 kbps)**. These are selection targets; the available stream determines the actual format and bitrate. Disabling YouTube stops active YouTube playback and keeps the queue.
+
+YouTube extraction is unofficial and can stop working when the service changes. Restricted, removed, account-required, live, or unsupported videos may not play. Search uses music-oriented metadata filters; it cannot guarantee music-only results or correct recording-artist attribution. A YouTube uploader may be a channel, cover artist, or remixer.
+
+### Lyrics, including offline `.lrc` files
+
+Tap **Lyrics** in the full player or swipe up on its artwork. Synchronized lines follow playback and can be tapped to seek; plain-text lyrics are shown when timed lyrics are unavailable.
+
+For offline lyrics:
+
+1. Place a matching sidecar beside the audio file, such as `My Song.mp3` and `My Song.lrc`.
+2. On Android 10+, open that song’s lyrics screen, tap **Choose song folder for .lrc**, and choose the exact folder containing both files. Audio permission alone does not grant access to text sidecars.
+3. Refresh lyrics if needed. Repeat the folder selection for songs in other folders or if access is revoked.
+
+A simple UTF-8 `.lrc` file looks like this:
+
+```text
+[00:12.00]First line of the song
+[00:18.50]Next line of the song
+```
+
+The parser supports multiple timestamps per line and `[offset:...]` timing adjustments in milliseconds. Local sidecars are limited to 256 KiB. A usable local file takes priority; otherwise, Svara looks up the song on LRCLIB using title, artist, and, when available, album and duration. Accurate tags help it find the right recording.
+
+## Privacy and stored data
+
+Svara stores its library index, favorites, playlists, settings, listening history, and playback state on the device. **Settings → Clear listening history** removes the history used by Quick Mix. Android cloud backup is disabled with `android:allowBackup="false"`.
+
+Online features contact third parties: Audius, YouTube and their stream/artwork hosts, and LRCLIB. Providers receive requests and normal network information; LRCLIB lookup includes song metadata. Local audio playback itself needs no network connection, but opening lyrics may trigger an online lookup if a local sidecar is unavailable.
+
+The app does not implement persistent downloads or a disk cache for online audio. Search responses, fetched artwork, and online lyrics use bounded session-memory caches. Saved YouTube selections retain identifying titles and uploader labels; saved Audius selections use reference placeholders and refresh metadata at playback. Resolved stream URLs and request headers are not persisted.
+
+Android permissions declared by the app:
+
+| Permission                                                             | Purpose                                                                            |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `READ_MEDIA_AUDIO` (Android 13+)                                       | Read the local audio library                                                       |
+| `READ_EXTERNAL_STORAGE` (Android 12 and earlier)                       | Read local audio on older Android versions                                         |
+| `INTERNET`                                                             | Discovery, streaming, artwork, and online lyrics                                   |
+| `WAKE_LOCK`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Support background playback                                                        |
+| `POST_NOTIFICATIONS`                                                   | Playback notifications; visibility also depends on Android’s notification settings |
+
+Local lyrics folder access is granted separately through Android’s system folder picker. The app does not declare camera, microphone, contacts, or unrestricted file-access permissions.
+
+## Development setup
+
+### Prerequisites
+
+The checked-in dependency configuration was generated with **Flutter 3.47.7**. Use that version as the starting point for reproducing builds; newer SDKs may require migration.
+
+| Tool             | Requirement                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| Flutter and Dart | Flutter 3.47.7; `pubspec.yaml` requires Dart `>=3.13.0 <4.0.0`                     |
+| Java             | JDK 21 recommended; Java/Kotlin source targets are 17                              |
+| Android SDK      | Platform API 36 and the build tools/NDK requested by Flutter and Gradle            |
+| Device           | Android phone with USB debugging enabled, or an Android emulator                   |
+| Network          | Needed initially for Dart packages, Gradle, Google/Maven repositories, and JitPack |
+
+The app inherits compile, target, and minimum SDK versions from Flutter. Flutter 3.47.7 supplies compile/target API 36 and minimum API 24; the YouTube plugin explicitly uses compile API 36 and minimum API 24. Recheck these values when upgrading Flutter.
+
+### Clone, check tools, and run
 
 ```sh
-# Clone the repository
-git clone https://github.com/your-username/music-player-app.git
-cd music-player-app
+git clone https://github.com/maadhav-codes/svara-music-player.git
+cd svara-music-player
 
-# Install dependencies
+flutter --version
+flutter doctor -v
+flutter doctor --android-licenses
 flutter pub get
-
-# Run on a connected device or emulator
-flutter run
+flutter devices
+flutter run -d DEVICE_ID
 ```
 
-### 3. Audius API Configuration (Optional)
+Replace `DEVICE_ID` with an Android device ID from `flutter devices`. Resolve Android toolchain issues reported by `flutter doctor` before running. If Flutter selects the wrong Java installation, configure it with `flutter config --jdk-dir=/absolute/path/to/jdk-21`.
 
-The public read endpoints work out-of-the-box without credentials. You can optionally supply your own registered Audius public API key at build time:
+### Optional Audius configuration
+
+The code defaults to `https://api.audius.co` and omits the API key when none is supplied. Provider access or rate limits may still affect requests. To use a registered **public** Audius key:
 
 ```sh
-flutter run --dart-define=AUDIUS_API_KEY=YOUR_PUBLIC_API_KEY
+flutter run -d DEVICE_ID --dart-define=AUDIUS_API_KEY=YOUR_PUBLIC_API_KEY
 ```
 
-> [!NOTE]
-> `AUDIUS_BASE_URL` defaults to `https://api.audius.co`. Do **not** inject private bearer tokens or secrets into client builds.
+To override the base URL, add `--dart-define=AUDIUS_BASE_URL=https://YOUR_HOST`. Use an HTTPS endpoint compatible with the repository’s `/v1/tracks/...` requests. Pass the same defines to `flutter build` when preparing an APK. These values are compiled into the client; never use private tokens or secrets.
 
----
+YouTube uses the local Android plugin and does not require a YouTube API key, Python, Deno, or a hosted backend. LRCLIB lookup has no configurable key in this implementation.
 
-## 🛠️ Project Architecture
-
-The app follows a feature-driven, clean architecture powered by **Riverpod**:
+## Codebase guide
 
 ```text
 lib/
-├── core/                       # Shared models, persistent store, and utilities
-│   ├── artwork.dart            # In-memory LRU artwork cache (8 MB limit)
-│   ├── providers.dart          # Riverpod state notifiers (Theme, Favorites)
-│   ├── store.dart              # SQLite database (settings, library index, history)
-│   └── track.dart              # Universal Track model & queue algorithms
-├── features/
-│   ├── library/                # MediaStore repository, pagination, and local library UI
-│   ├── discovery/              # Audius REST API, YouTube bridge repository, source selector
-│   ├── player/                 # Logical queue, source resolver, shared audio engine
-│   ├── playlists/              # On-device playlist repository and management UI
-│   └── settings/               # Themes, privacy overview, and terms of service links
-├── main.dart                   # Service initialization & provider registration
-└── svara_app.dart              # Root Material 3 application & navigation shell
+├── main.dart                 # Opens SQLite, creates repositories and audio service
+├── svara_app.dart            # Material 3 themes and Library/Discover/Playlists navigation
+├── core/                    # Track/source models, Riverpod providers, SQLite, artwork
+└── features/
+    ├── library/             # Android MediaStore bridge, library filters and song options
+    ├── discovery/           # Audius client, YouTube repository, categories and search UI
+    ├── player/              # Audio handler, source resolution, queue and player UI
+    ├── playlists/           # Playlist persistence and management
+    ├── lyrics/              # LRC parsing, LRCLIB lookup and lyrics UI
+    └── settings/            # Theme, YouTube configuration, history and licenses
+android/app/src/main/
+├── AndroidManifest.xml      # Permissions, activity and background audio service
+└── kotlin/app/svara/
+    └── MainActivity.kt      # MediaStore, local artwork and lyrics-folder access
+packages/svara_youtube/      # Dart method channel and native NewPipeExtractor plugin
+test/                       # Unit and widget tests
+integration_test/           # Live Android YouTube playback smoke test
+assets/licenses/            # Bundled software license notices
 ```
 
-### Key Libraries
+Riverpod wires repositories and app state. SQLite (`sqflite`) holds durable data; Dio handles Audius and lyrics requests. `just_audio` plays audio, `audio_service` exposes background/media controls, and `audio_session` handles audio focus.
 
-- **Audio Engine**: [`just_audio`](https://pub.dev/packages/just_audio) + [`audio_service`](https://pub.dev/packages/audio_service) + [`audio_session`](https://pub.dev/packages/audio_session)
-- **State Management**: [`flutter_riverpod`](https://pub.dev/packages/flutter_riverpod)
-- **Local Database**: [`sqflite`](https://pub.dev/packages/sqflite) (SQLite)
-- **Networking**: [`dio`](https://pub.dev/packages/dio) with cancellation and exponential backoff
+`Track.source` identifies local, Audius, or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. `SourceResolver` resolves the selected reference at playback time, and the audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
 
----
+The YouTube plugin registers with both foreground and background Flutter engines. Native dependencies are pinned in `packages/svara_youtube/android/build.gradle`: NewPipeExtractor **v0.26.5**, OkHttp **4.12.0**, and NIO desugaring **2.1.5**. Native requests use bounded workers, cancellation, and deadlines; transient repository requests retry at most twice.
 
-## 🧪 Verification & Testing
+YouTube song searches normally keep results between 45 seconds and 20 minutes and exclude likely non-music titles. Explicit mix, album, compilation, concert, or DJ-set searches use music video results and may allow long-form uploads up to four hours. An empty filtered page can still have a continuation. Tests cover this policy in Dart and Kotlin.
 
-Run the deterministic checks before releasing:
+## Checks and tests
+
+Run these from the repository root:
 
 ```sh
-# 1. Format check
+# Check formatting without rewriting files.
 dart format --output=none --set-exit-if-changed lib test integration_test packages/svara_youtube/lib
 
-# 2. Static analysis
+# Analyze Dart code.
 flutter analyze
 
-# 3. Unit & Widget tests
+# Run the unit and widget suite in test/.
 flutter test
 ```
 
----
+The suite covers queue behavior, source resolution, discovery policies, library interactions, lyrics, player layouts, and gestures. Desktop tests use system SQLite through `sqflite_common_ffi`; a missing SQLite shared library must be resolved on the host.
 
-## 📦 Building Production APKs
-
-To generate APKs for distribution:
+To run the native YouTube search-policy tests on macOS/Linux after Flutter setup:
 
 ```sh
-# Build debug APK
-flutter build apk --debug
-
-# Build release APK
-flutter build apk --release
+cd android
+./gradlew :svara_youtube:testDebugUnitTest
+cd ..
 ```
 
-Outputs are located in:  
-`build/app/outputs/flutter-apk/app-release.apk`
-
-> [!IMPORTANT]
-> The repository currently signs release APKs with the local Android debug key for convenience. Before distributing to the Google Play Store or F-Droid, configure your own production keystore in `android/app/build.gradle.kts`.
-
----
-
-## 🛡️ Privacy & Compliance
-
-- **Scoped Storage**: Svara only requests `READ_MEDIA_AUDIO` (Android 13+) or `READ_EXTERNAL_STORAGE` (Android 12 and below). It never asks for contacts, cameras, microphones, or unrestricted storage access.
-- **Online storage**: Audius uses public REST endpoints; YouTube uses unofficial extraction. Online songs and audio are **never downloaded or cached to disk**. Audius metadata and artwork are kept strictly in volatile session memory.
-- **No Cloud Backup**: `android:allowBackup="false"` is enforced to protect your personal listening habits from being uploaded to cloud backups.
-
----
-
-## 📄 License & Attribution
-
-- Released under **GPL-3.0-or-later**, including the bundled NewPipeExtractor integration. See [LICENSE](LICENSE) and [native notices](assets/licenses/NOTICE.txt).
-- Music streamed through the Discover tab is provided by [Audius](https://audius.co) under the [Open Music License](https://audius.org/open-music-license.pdf).
-
-## Experimental YouTube integration
-
-Discover has an Audius / YouTube selector. YouTube search is debounced and paginated; results identify the uploader and offer a canonical YouTube link. Settings can disable this source and select Data saver, Standard, or High audio quality. Disabling YouTube stops active YouTube playback while preserving the queue.
-
-YouTube discovery searches the YouTube Music song catalog. Broad queries gain a `music` suffix without changing the text in the search field. Results exclude live streams, unknown durations, clips under 45 seconds, tracks over 20 minutes, and titles indicating gameplay, reactions, reviews, tutorials, podcasts, trailers, or other non-music content. Explicit mix/album/compilation/concert/DJ-set searches use YouTube Music video results and may include uploads up to four hours when their titles also indicate long-form music. Topic/VEVO uploads and official audio receive preference within each page. These are metadata heuristics; they cannot detect spoken intros or guarantee that every result contains only music. Filtering may leave a page empty while its Load more button still offers additional results. Old generic-video search cache entries are excluded.
-
-The local Flutter plugin at `packages/svara_youtube` registers on every engine, including the background service engine. It pins **NewPipeExtractor v0.26.5**, **OkHttp 4.12.0**, and **desugar_jdk_libs_nio 2.1.5**. Gradle needs internet access to Maven repositories and JitPack. No YouTube API key, private credentials, Python, Deno, or hosting server is required by this implementation. Network/parser work runs on two native workers with a bounded queue and cancellation/deadlines; transient requests retry at most twice.
-
-`Track.source` distinguishes local, Audius, and YouTube references. Existing local/Audius records are read without changing their IDs. One audio player receives only the current resolved stream. The handler owns shuffle, repeat, navigation, and queue edits. Each online selection is resolved at playback time; signed URLs and headers are never persisted. YouTube titles/uploader labels from user-selected queues and playlists are saved for identification, with current metadata refreshed on playback. Audius saved records retain reference-only placeholders. Search/artwork caches remain bounded and session-only.
-
-On a playback failure, the handler tries one fresh resolution (an alternative supported format for YouTube) before pausing with the queue and position preserved. Restricted, account-required, removed, or unsupported videos produce useful messages. Live videos and non-progressive/unsupported delivery formats are currently excluded. Gapless transitions across the logical queue are not guaranteed; there is no next-track extraction prefetch or persistent audio download/cache.
-
-YouTube extraction is **unofficial and experimental**. It can break when YouTube changes and does not guarantee all mainstream music. Personal use and GitHub distribution do not waive [YouTube terms](https://www.youtube.com/static?template=terms). An official visible-player integration has different restrictions and does not provide an authorized raw-audio/background replacement. Software licenses do not grant recording rights.
+On Windows, use `gradlew.bat` instead of `./gradlew`.
 
 ### Live Android smoke test
 
-Use a dedicated test device or back up Svara data first. Flutter's installer may uninstall an existing application when its version/signature conflicts. Check the installed build number and use a higher `--build-number` where required; do not allow uninstall on a device with data you need.
+This separate test needs an Android device, network access, and working YouTube extraction. It is not run by the normal `flutter test` command.
+
+Use a dedicated test device: installation may replace the installed app, and version or signing conflicts may prompt an uninstall. Do not uninstall an installation containing data you need.
 
 ```sh
 flutter test integration_test/youtube_device_test.dart -d DEVICE_ID
-# Optional longer window for a manual HOME/background check:
+
+# Allow a longer window to check playback after pressing Home.
 flutter test integration_test/youtube_device_test.dart -d DEVICE_ID --dart-define=BACKGROUND_SECONDS=15
 ```
 
-The live test uses Kevin MacLeod music for search/pagination and Blender's Big Buck Bunny as a separate muted playback fixture for audio decoding, seeking, queue serialization, and progression. It is excluded from normal unit-test CI. For background verification, send HOME during `BACKGROUND_READY`, then check that the test completes. Afterward rebuild/install the regular app: the test APK is a harness, not the normal UI.
+The test searches Kevin MacLeod music, checks pagination, and uses Blender’s Big Buck Bunny as a muted playback fixture for resolution, decoding, seeking, progression, and saved-reference checks. For background verification, press Home when the log prints `BACKGROUND_READY`, then confirm the test passes. Reinstall the regular app afterward with `flutter run -d DEVICE_ID`; the test APK displays a test harness.
 
-### Updating and distributing
+## Build-and-release instructions
 
-Pin a reviewed extractor release in `packages/svara_youtube/android/build.gradle`, update notices, and rerun unit tests, the live device check, and a minified release build. The app uses the existing legacy Kotlin Gradle compatibility flags; Flutter warns these will need migration in a future SDK update. Consumer R8 rules retain Rhino classes; minimum API 24 requires NIO core-library desugaring in both app and plugin.
+```sh
+# Development APK.
+flutter build apk --debug
 
-Release APKs are currently **development-signed**, even in release mode. Configure a production signing key before public distribution, preserve that key for upgrades, and publish corresponding app/plugin source, build instructions, and third-party notices alongside your APK. Do not publish cookies, signing keys, signed stream URLs, or music files. Keep local playback usable when extraction is unavailable.
+# Universal release APK.
+flutter build apk --release
 
-### Synchronized lyrics
+# Smaller release APKs, one per architecture.
+flutter build apk --release --split-per-abi
+```
 
-Tap **Lyrics** in the full player or swipe up on its artwork. Svara shows line-synchronized LRCLIB lyrics, with tap-to-seek and plain-text fallback. Local `.lrc` sidecars take priority and work offline. On Android 10+, choose the exact song folder once from the lyrics screen to grant access to text sidecars. See [lyrics setup and validation](docs/LYRICS.md) for formats, caching, privacy and Android storage details.
+Build outputs are in `build/app/outputs/flutter-apk/`:
 
-### Mini-player gestures
+| Build             | Filename                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| Debug             | `app-debug.apk`                                                                      |
+| Universal release | `app-release.apk`                                                                    |
+| Split release     | `app-arm64-v8a-release.apk`, `app-armeabi-v7a-release.apk`, `app-x86_64-release.apk` |
 
-Swipe left on the mini-player for Next, right for Previous, and up to open the full player. Tapping still opens the player, and the Play/Pause and Next buttons remain available. Previous uses the same behavior as the full-player control: restart after three seconds of playback, otherwise select the previous queue item. Small drags and downward swipes on the mini-player do nothing. Artwork and text follow horizontal drags with resistance and ease back on release; reduced-motion settings disable this movement. A subtle selection haptic fires when a swipe actually selects another queue item. In the full player, swipe down while its content is at the top to close it; scrolling, seeking and the upward lyrics gesture remain available.
+Install a universal release on a connected test device with Android SDK’s `adb`:
 
-### Discover categories
+```sh
+adb -s DEVICE_ID install -r build/app/outputs/flutter-apk/app-release.apk
+```
 
-When search is empty, tap **Trending Today**, **Top Charts**, **Chill / Lofi**, **Workout**, **Pop**, or **Rock** to explore without typing. Chips stay visible while results load in one horizontally scrollable row, including with larger text. Audius starts with Trending Today selected; the provider and actual time range appear in a subtle sub-header. Typing returns to normal search; clearing the field restores browse suggestions. Category selection follows source switching, refresh, retry and pagination.
+**Release signing is not configured for production.** `android/app/build.gradle.kts` currently signs release builds with the local debug key. Release mode enables minification and resource shrinking, but does not change that signing arrangement.
 
-Audius uses genre-filtered weekly trending for Lo-Fi, Pop and Rock, and a music search for Workout. Its Trending Today shortcut shows weekly trending and Top Charts shows monthly trending, with the actual range labeled below the heading; these are Audius rankings rather than global daily charts. YouTube categories launch labeled suggested music searches. Provider ranges and genre filters follow the [official Audius documentation](https://docs.audius.co/sdk/tracks/).
+Before public distribution:
 
----
+1. Configure a production keystore and release signing in `android/app/build.gradle.kts`. Keep the keystore and passwords outside version control, and preserve the key for future updates.
+2. Update `version` in `pubspec.yaml` (`versionName+versionCode`) and the displayed version in `lib/features/settings/settings_screen.dart`. Use a higher build number for upgrades; `--build-number=NUMBER` can override it during a build.
+3. Run the checks above, the relevant Android smoke tests, and a minified release build. Confirm local playback, permissions, playlists, notification controls, and lyrics on a device.
+4. Ship corresponding app/plugin source, build instructions, and third-party notices with the distribution.
 
-## 👨‍💻 Author
+When updating NewPipeExtractor, review and pin the new version, update `assets/licenses/NOTICE.txt`, and verify native tests, live playback, and release shrinking. Preserve the plugin’s Rhino consumer R8 rules and NIO desugaring in both the app and plugin. The Gradle compatibility flags `android.builtInKotlin=false` and `android.newDsl=false` are currently enabled; revisit them when migrating the Android/Flutter toolchain.
 
-**Mayur Dayal**
+## Troubleshooting
 
-- Email: [mayurdayal.engineer@gmail.com](mailto:mayurdayal.engineer@gmail.com)
+| Problem                               | What to check                                                                                                                                                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Library permission denied             | Tap **Allow music access / Retry**, or **Open app settings** and grant audio access.                                                                              |
+| Music is missing                      | Confirm the files are on the phone and indexed by Android, then refresh Library. Files hidden from MediaStore, including folders with `.nomedia`, may not appear. |
+| A local file will not play            | Check that the file still exists, audio access is granted, and the device supports its encoding.                                                                  |
+| Discover fails or returns no results  | Check connectivity and try another query or provider. An empty YouTube page may still offer **Load more**.                                                        |
+| YouTube playback fails                | Retry, check that YouTube is enabled, or use local music/Audius. Restrictions or extractor changes may require an app update.                                     |
+| Lyrics are missing or incorrect       | Check title/artist tags and recording duration. Add a matching `.lrc` sidecar and grant the exact song folder on Android 10+.                                     |
+| Gradle cannot resolve dependencies    | Check access to Google Maven, Maven Central, and JitPack, plus the selected JDK and installed Android SDK.                                                        |
+| APK will not update the installed app | Check version code and signing key. Keep the original key; uninstalling to resolve a conflict deletes app data.                                                   |
+
+## License and credits
+
+Svara is **GPL-3.0-or-later**. See [LICENSE](LICENSE) and [native dependency notices](assets/licenses/NOTICE.txt). Third-party notices are also available in **Settings → Open-source licenses**.
+
+Music and lyrics come from their respective providers; their availability and permitted use depend on the provider and rights holder. Software licenses do not grant rights to recordings or override provider terms. The experimental YouTube integration is not an official YouTube client.
+
+Created by **Mayur Dayal** — [mayurdayal.engineer@gmail.com](mailto:mayurdayal.engineer@gmail.com).
