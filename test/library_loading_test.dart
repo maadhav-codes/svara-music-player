@@ -109,9 +109,7 @@ void main() {
         await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
         await tester.pumpAndSettle();
         expect(find.text('Quick Mix'), findsNothing);
-        await tester.tap(find.byTooltip('Library options'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Mix my library'));
+        await tester.tap(find.byTooltip('Mix my library'));
         await settle();
         expect(handler.tracks, hasLength(50));
         expect(repo.reads, 2);

@@ -15,6 +15,10 @@ class LibraryRepository {
         request ? 'requestPermission' : 'hasPermission',
       ) ??
       false;
+  Future<bool> isPermissionPermanentlyDenied() async =>
+      await channel.invokeMethod<bool>('isPermissionPermanentlyDenied') ??
+      false;
+
   Future<void> refresh() async {
     final known = <String, int>{};
     final version = await store.read('mediaVersion');

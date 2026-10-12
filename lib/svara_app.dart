@@ -64,6 +64,7 @@ class _HomeState extends ConsumerState<Home> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      titleSpacing: 24,
       title: const Row(
         children: [
           Icon(Icons.graphic_eq_rounded),
@@ -74,6 +75,7 @@ class _HomeState extends ConsumerState<Home> {
           ),
         ],
       ),
+      actionsPadding: const EdgeInsets.only(right: 12),
       actions: [
         IconButton(
           tooltip: 'Settings',
@@ -103,12 +105,13 @@ class _HomeState extends ConsumerState<Home> {
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.library_music_outlined),
-              selectedIcon: Icon(Icons.library_music),
               label: 'Library',
             ),
             NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
+              icon: SizedBox.square(
+                dimension: 24,
+                child: Center(child: Icon(Icons.explore_outlined)),
+              ),
               label: 'Discover',
             ),
             NavigationDestination(

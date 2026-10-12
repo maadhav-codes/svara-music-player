@@ -23,7 +23,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   final searchController = TextEditingController();
   String query = '', filter = 'All', sort = 'Title';
   String? group, error;
-  bool allowed = false, loading = true;
+  bool allowed = false, loading = true, permanentlyDenied = false;
   Future<void>? _refreshTask;
   @override
   void initState() {
@@ -59,7 +59,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       if (!mounted) return;
       setState(() => allowed = permission);
       if (!allowed) {
-        tracks.clear();
+        final blocked = await repo.isPermissionPermanentlyDenied();
+        if (!mounted) return;
+        setState(() {
+          permanentlyDenied = blocked;
+          tracks.clear();
+        });
         return;
       }
       final saved = await repo.all();
@@ -87,6 +92,80 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   @override
   Widget build(BuildContext context) {
     final favorites = ref.watch(favoritesProvider);
+    if (!allowed || tracks.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: refresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: loading
+                    ? const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Finding your music…'),
+                        ],
+                      )
+                    : MusicEmptyState(
+                        title: error != null
+                            ? 'Couldn’t load your music'
+                            : 'Your library is empty',
+                        message: error != null
+                            ? 'Please try again to find music on your phone.'
+                            : !allowed
+                            ? permanentlyDenied
+                                  ? 'Enable music access in app settings to find songs on your phone.'
+                                  : 'Allow music access to bring the songs on your phone into Svara.'
+                            : 'Add music to your phone, then refresh your library. You can also explore music in Discover.',
+                        actionLabel: error != null
+                            ? 'Retry'
+                            : !allowed
+                            ? permanentlyDenied
+                                  ? 'Open app settings'
+                                  : 'Allow music access'
+                            : widget.onDiscover != null
+                            ? 'Explore Discover'
+                            : 'Refresh music',
+                        onAction: () async {
+                          if (error != null) {
+                            await refresh();
+                          } else if (!allowed) {
+                            if (permanentlyDenied) {
+                              try {
+                                await ref
+                                    .read(libraryRepositoryProvider)
+                                    .openSettings();
+                              } catch (_) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Could not open app settings. Please try again.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } else {
+                              await refresh(request: true);
+                            }
+                          } else if (widget.onDiscover != null) {
+                            widget.onDiscover!();
+                          } else {
+                            await refresh();
+                          }
+                        },
+                        icon: Icons.library_music_outlined,
+                      ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final list = tracks
         .where(
           (t) =>
@@ -125,257 +204,255 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               .toList()
         : <String>[];
     groups.sort();
-    return RefreshIndicator(
-      onRefresh: refresh,
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'Find a song, artist, album…',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    onChanged: (value) {
-                      setState(() => query = value);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return RefreshIndicator(
+          onRefresh: refresh,
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: Text(group ?? '${tracks.length} tracks')),
-                      if (group != null)
-                        TextButton(
-                          onPressed: () => setState(() => group = null),
-                          child: const Text('All groups'),
+                      TextField(
+                        controller: searchController,
+                        decoration: const InputDecoration(
+                          hintText: 'Find a song, artist, album…',
+                          prefixIcon: Icon(Icons.search),
                         ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Library options',
-                        icon: const Icon(Icons.more_vert),
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: 'mix',
-                            enabled: tracks.isNotEmpty,
-                            child: const ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('Mix my library'),
-                              subtitle: Text(
-                                'Mix favorites with songs you haven’t played recently.',
-                              ),
-                            ),
-                          ),
-                        ],
-                        onSelected: (_) async {
-                          final history = await ref
-                              .read(storeProvider)
-                              .history();
-                          if (!mounted) return;
-                          await ref
-                              .read(handlerProvider)
-                              .setQueue(quickMix(tracks, favorites, history));
+                        onChanged: (value) {
+                          setState(() => query = value);
                         },
                       ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Sort songs',
-                        onSelected: (value) => setState(() => sort = value),
-                        itemBuilder: (_) =>
-                            ['Title', 'Artist', 'Duration', 'Recent']
-                                .map(
-                                  (s) =>
-                                      PopupMenuItem(value: s, child: Text(s)),
-                                )
-                                .toList(),
-                        icon: const Icon(Icons.sort),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              group ??
+                                  '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}',
+                            ),
+                          ),
+                          if (group != null)
+                            TextButton(
+                              onPressed: () => setState(() => group = null),
+                              child: const Text('All groups'),
+                            ),
+                          IconButton(
+                            tooltip: 'Mix my library',
+                            icon: const Icon(Icons.shuffle_rounded),
+                            onPressed: () async {
+                              final history = await ref
+                                  .read(storeProvider)
+                                  .history();
+                              if (!mounted) return;
+                              await ref
+                                  .read(handlerProvider)
+                                  .setQueue(
+                                    quickMix(tracks, favorites, history),
+                                  );
+                            },
+                          ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Sort songs',
+                            onSelected: (value) => setState(() => sort = value),
+                            itemBuilder: (_) =>
+                                ['Title', 'Artist', 'Duration', 'Recent']
+                                    .map(
+                                      (s) => PopupMenuItem(
+                                        value: s,
+                                        child: Text(s),
+                                      ),
+                                    )
+                                    .toList(),
+                            icon: const Icon(Icons.sort),
+                          ),
+                        ],
                       ),
+                      if (loading) const LinearProgressIndicator(),
+                      if (error != null)
+                        TextButton(
+                          onPressed: refresh,
+                          child: Text('$error Retry'),
+                        ),
                     ],
                   ),
-                  if (loading) const LinearProgressIndicator(),
-                  if (error != null)
-                    TextButton(onPressed: refresh, child: Text('$error Retry')),
-                ],
+                ),
               ),
-            ),
-          ),
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _FilterHeader(
-              height: 56 + (MediaQuery.textScalerOf(context).scale(14) - 14),
-              child: Material(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 4,
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children:
-                          [
-                                'All',
-                                'Artists',
-                                'Albums',
-                                'Folders',
-                                'Recently played',
-                              ]
-                              .map(
-                                (name) => Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text(name),
-                                    selected: filter == name,
-                                    onSelected: (_) {
-                                      setState(() {
-                                        filter = name;
-                                        group = null;
-                                      });
-                                    },
-                                  ),
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _FilterHeader(
+                  height: _filterHeight(context, constraints.maxWidth),
+                  child: Material(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _filters
+                            .map(
+                              (name) => ChoiceChip(
+                                label: Text(name),
+                                showCheckmark: false,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
                                 ),
-                              )
-                              .toList(),
+                                labelPadding: EdgeInsets.zero,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.padded,
+                                selected: filter == name,
+                                onSelected: (_) {
+                                  setState(() {
+                                    filter = name;
+                                    group = null;
+                                  });
+                                },
+                              ),
+                            )
+                            .toList(),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          if (query.trim().isEmpty && filter == 'All' && group == null)
-            const SliverToBoxAdapter(child: PersonalizedFeed()),
-          if (!allowed && !loading)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.library_music_outlined, size: 56),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Let Svara find music on your phone.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: () => refresh(request: true),
-                        child: const Text('Allow music access / Retry'),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            ref.read(libraryRepositoryProvider).openSettings(),
-                        child: const Text('Open app settings'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (allowed &&
-              !loading &&
-              list.isEmpty &&
-              filter != 'Recently played')
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: MusicEmptyState(
-                  title: query.isNotEmpty
-                      ? 'No songs found'
-                      : 'A little quiet here',
-                  message: query.isNotEmpty
-                      ? 'Try another search or search online music in Discover.'
-                      : 'Add music to your phone or search online music in Discover.',
-                  actionLabel: widget.onDiscover != null
-                      ? 'Explore Discover'
-                      : 'Refresh music',
-                  onAction: widget.onDiscover ?? () => refresh(),
-                  icon: query.isNotEmpty
-                      ? Icons.search_rounded
-                      : Icons.library_music_outlined,
-                ),
-              ),
-            ),
-          if (filter == 'Recently played')
-            SliverToBoxAdapter(
-              child: FutureBuilder<Map<String, int>>(
-                future: ref.read(storeProvider).history(),
-                builder: (context, snapshot) {
-                  final recent =
-                      list
-                          .where(
-                            (t) => snapshot.data?.containsKey(t.id) ?? false,
-                          )
-                          .toList()
-                        ..sort(
-                          (a, b) => snapshot.data![b.id]!.compareTo(
-                            snapshot.data![a.id]!,
-                          ),
-                        );
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (recent.isEmpty) {
-                    return MusicEmptyState(
-                      title: 'Your listening story starts here',
-                      message:
-                          'Play a song or explore a new sound in Discover.',
+              if (query.trim().isEmpty && filter == 'All' && group == null)
+                const SliverToBoxAdapter(child: PersonalizedFeed()),
+              if (allowed &&
+                  !loading &&
+                  list.isEmpty &&
+                  filter != 'Recently played')
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: MusicEmptyState(
+                      title: query.isNotEmpty
+                          ? 'No songs found'
+                          : 'No songs in this group',
+                      message: query.isNotEmpty
+                          ? 'Try another search or search online music in Discover.'
+                          : 'Choose another group or explore music in Discover.',
                       actionLabel: widget.onDiscover != null
                           ? 'Explore Discover'
-                          : 'Show all songs',
-                      onAction:
-                          widget.onDiscover ??
-                          () => setState(() => filter = 'All'),
-                    );
-                  }
-                  return Column(
-                    children: recent
-                        .map(
-                          (t) => SongTile(
-                            t,
-                            onPlay: () => ref
-                                .read(handlerProvider)
-                                .setQueue(recent, index: recent.indexOf(t)),
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-              ),
-            )
-          else if (grouping)
-            SliverList.builder(
-              itemCount: groups.length,
-              itemBuilder: (_, i) => ListTile(
-                leading: Icon(
-                  filter == 'Folders'
-                      ? Icons.folder_outlined
-                      : Icons.album_outlined,
+                          : 'Refresh music',
+                      onAction: widget.onDiscover ?? () => refresh(),
+                      icon: query.isNotEmpty
+                          ? Icons.search_rounded
+                          : Icons.library_music_outlined,
+                    ),
+                  ),
                 ),
-                title: Text(groups[i].isEmpty ? 'Unknown' : groups[i]),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => setState(() => group = groups[i]),
-              ),
-            )
-          else
-            SliverList.builder(
-              itemCount: list.length,
-              itemBuilder: (_, i) => SongTile(
-                list[i],
-                onPlay: () =>
-                    ref.read(handlerProvider).setQueue(list, index: i),
-              ),
-            ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-        ],
-      ),
+              if (filter == 'Recently played')
+                SliverToBoxAdapter(
+                  child: FutureBuilder<Map<String, int>>(
+                    future: ref.read(storeProvider).history(),
+                    builder: (context, snapshot) {
+                      final recent =
+                          list
+                              .where(
+                                (t) =>
+                                    snapshot.data?.containsKey(t.id) ?? false,
+                              )
+                              .toList()
+                            ..sort(
+                              (a, b) => snapshot.data![b.id]!.compareTo(
+                                snapshot.data![a.id]!,
+                              ),
+                            );
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (recent.isEmpty) {
+                        return MusicEmptyState(
+                          title: 'Your listening story starts here',
+                          message:
+                              'Play a song or explore a new sound in Discover.',
+                          actionLabel: widget.onDiscover != null
+                              ? 'Explore Discover'
+                              : 'Show all songs',
+                          onAction:
+                              widget.onDiscover ??
+                              () => setState(() => filter = 'All'),
+                        );
+                      }
+                      return Column(
+                        children: recent
+                            .map(
+                              (t) => SongTile(
+                                t,
+                                onPlay: () => ref
+                                    .read(handlerProvider)
+                                    .setQueue(recent, index: recent.indexOf(t)),
+                              ),
+                            )
+                            .toList(),
+                      );
+                    },
+                  ),
+                )
+              else if (grouping)
+                SliverList.builder(
+                  itemCount: groups.length,
+                  itemBuilder: (_, i) => ListTile(
+                    leading: Icon(
+                      filter == 'Folders'
+                          ? Icons.folder_outlined
+                          : Icons.album_outlined,
+                    ),
+                    title: Text(groups[i].isEmpty ? 'Unknown' : groups[i]),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => setState(() => group = groups[i]),
+                  ),
+                )
+              else
+                SliverList.builder(
+                  itemCount: list.length,
+                  itemBuilder: (_, i) => SongTile(
+                    list[i],
+                    onPlay: () =>
+                        ref.read(handlerProvider).setQueue(list, index: i),
+                  ),
+                ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          ),
+        );
+      },
     );
   }
+}
+
+const _filters = ['All', 'Artists', 'Albums', 'Folders', 'Recently played'];
+
+// Match the chip padding and wrap spacing so the pinned header can grow with text.
+double _filterHeight(BuildContext context, double width) {
+  final style =
+      Theme.of(context).chipTheme.labelStyle ??
+      Theme.of(context).textTheme.labelLarge!;
+  var rows = 1;
+  var usedWidth = 0.0;
+  var rowHeight = 48.0;
+  for (final label in _filters) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final chipWidth = painter.width + 26;
+    final chipHeight = painter.height + 18;
+    if (chipHeight > rowHeight) rowHeight = chipHeight;
+    if (usedWidth > 0 && usedWidth + 8 + chipWidth > width - 32) {
+      rows++;
+      usedWidth = chipWidth;
+    } else {
+      usedWidth += (usedWidth == 0 ? 0 : 8) + chipWidth;
+    }
+    painter.dispose();
+  }
+  return 24 + rows * rowHeight + (rows - 1) * 4;
 }
 
 class _FilterHeader extends SliverPersistentHeaderDelegate {
@@ -411,8 +488,10 @@ class SongTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    horizontalTitleGap: 12,
+    minLeadingWidth: 44,
     leading: TrackArt(track, size: 44),
-    title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+    title: Text(track.title, maxLines: 2, overflow: TextOverflow.ellipsis),
     subtitle: Text(
       '${track.recordingArtist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
       maxLines: 1,

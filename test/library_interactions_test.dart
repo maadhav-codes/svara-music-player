@@ -91,6 +91,156 @@ void main() {
     await settle(tester);
   }
 
+  testWidgets('permission CTA follows denial and settings recovery', (
+    tester,
+  ) async {
+    var allowed = false, blocked = false;
+    var requests = 0, settings = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          switch (call.method) {
+            case 'hasPermission':
+              return allowed;
+            case 'isPermissionPermanentlyDenied':
+              return blocked;
+            case 'requestPermission':
+              requests++;
+              blocked = requests > 1;
+              return false;
+            case 'openSettings':
+              settings++;
+              allowed = true;
+              return null;
+            case 'scan':
+              return {
+                'changed': [song.toJson()],
+                'ids': [song.id],
+              };
+          }
+          return null;
+        });
+    await mount(tester, const LibraryScreen());
+    expect(find.text('Your library is empty'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.byTooltip('Sort songs'), findsNothing);
+    expect(find.byTooltip('Library options'), findsNothing);
+    expect(find.text('0 tracks'), findsNothing);
+    expect(find.byType(FilledButton), findsOneWidget);
+    expect(find.text('Open app settings'), findsNothing);
+    await tester.tap(find.text('Allow music access'));
+    await settle(tester);
+    expect(requests, 1);
+    expect(find.text('Allow music access'), findsOneWidget);
+    await tester.tap(find.text('Allow music access'));
+    await settle(tester);
+    expect(requests, 2);
+    expect(find.text('Allow music access'), findsNothing);
+    expect(find.text('Open app settings'), findsOneWidget);
+    await tester.tap(find.text('Open app settings'));
+    await settle(tester);
+    expect(settings, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await settle(tester);
+    expect(find.text(song.title), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byTooltip('Sort songs'), findsOneWidget);
+    expect(find.text('Open app settings'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('empty scan and scan error have one useful action', (
+    tester,
+  ) async {
+    var failScan = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'hasPermission') return true;
+          if (call.method == 'scan') {
+            if (failScan) throw PlatformException(code: 'scan');
+            return {'changed': [], 'ids': []};
+          }
+          return null;
+        });
+    await mount(tester, const LibraryScreen());
+    expect(find.text('Your library is empty'), findsOneWidget);
+    expect(find.text('Refresh music'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(ChoiceChip), findsNothing);
+    failScan = true;
+    await tester.tap(find.text('Refresh music'));
+    await settle(tester);
+    expect(find.text('Couldn’t load your music'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.byType(FilledButton), findsOneWidget);
+    failScan = false;
+    await tester.tap(find.text('Retry'));
+    await settle(tester);
+    expect(find.text('Your library is empty'), findsOneWidget);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('single track title and wrapped filters fit narrow screens', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const longSong = Track(
+      id: 'long',
+      title: 'Kaho Na Kaho - Original Motion Picture Soundtrack',
+      artist: 'Amir Jamal',
+      uri: 'content://music/long',
+    );
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method == 'hasPermission') return true;
+      if (call.method == 'scan') {
+        return {
+          'changed': [longSong.toJson()],
+          'ids': [longSong.id],
+        };
+      }
+      return null;
+    });
+    await mount(tester, const LibraryScreen());
+    expect(find.text('1 track'), findsOneWidget);
+    expect(find.byTooltip('Library options'), findsNothing);
+    expect(find.byTooltip('Mix my library'), findsOneWidget);
+    final title = find.text(longSong.title);
+    expect(tester.getSize(title).height, greaterThan(30));
+    expect(tester.getRect(title).right, greaterThan(240));
+    for (final scale in [1.0, 2.0]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await tester.pumpAndSettle();
+      for (final label in [
+        'All',
+        'Artists',
+        'Albums',
+        'Folders',
+        'Recently played',
+      ]) {
+        final finder = find.widgetWithText(ChoiceChip, label);
+        expect(tester.widget<ChoiceChip>(finder).showCheckmark, false);
+        final rect = tester.getRect(finder);
+        expect(rect.left, greaterThanOrEqualTo(16));
+        expect(rect.right, lessThanOrEqualTo(304));
+        expect(rect.height, greaterThanOrEqualTo(48));
+        expect(finder.hitTestable(), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'full player adds the current song to new and existing playlists',
     (tester) async {

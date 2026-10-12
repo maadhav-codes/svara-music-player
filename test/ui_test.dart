@@ -116,7 +116,7 @@ void main() {
         ),
         const Track(
           id: '2',
-          title: 'A little closer',
+          title: 'Kaho Na Kaho - Original Motion Picture Soundtrack',
           artist: 'Device test artist',
           album: 'Quiet hours',
           durationMs: 180000,
@@ -192,15 +192,6 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 150));
       });
       await tester.pumpAndSettle();
-      expect(find.text('Allow music access / Retry'), findsOneWidget);
-      await tester.tap(find.text('Allow music access / Retry'));
-      await tester.pump();
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
-      await tester.pumpAndSettle();
-      expect(find.text('Evening raga'), findsOneWidget);
-      expect(tester.takeException(), null);
       final render =
           boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
       Future<void> captureThemes(String screen) async {
@@ -232,6 +223,38 @@ void main() {
         await tester.pumpAndSettle();
       }
 
+      await captureThemes('library-empty');
+      expect(find.text('Allow music access'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(find.text('Open app settings'), findsNothing);
+      await tester.tap(find.text('Allow music access'));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Evening raga'), findsOneWidget);
+      expect(tester.takeException(), null);
+      for (final destination in [
+        ('Library', Icons.library_music_outlined),
+        ('Discover', Icons.explore_outlined),
+        ('Playlists', Icons.queue_music),
+      ]) {
+        final nav = find.byType(NavigationBar);
+        final label = find.descendant(
+          of: nav,
+          matching: find.text(destination.$1),
+        );
+        final icon = find.descendant(
+          of: nav,
+          matching: find.byIcon(destination.$2),
+        );
+        expect(
+          tester.getCenter(icon).dx,
+          closeTo(tester.getCenter(label).dx, 0.1),
+        );
+      }
       await captureThemes('library');
       await tester.tap(
         find.descendant(

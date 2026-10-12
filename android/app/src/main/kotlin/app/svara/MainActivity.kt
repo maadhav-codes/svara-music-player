@@ -24,6 +24,7 @@ class MainActivity : AudioServiceActivity() {
     private var pendingLyrics: MethodChannel.Result? = null
     private var pendingLyricsFolder: String? = null
     private val lyricsPreferences by lazy { getSharedPreferences("lyrics_folders", MODE_PRIVATE) }
+    private val musicPermissionPreferences by lazy { getSharedPreferences("music_permission", MODE_PRIVATE) }
     private var pendingPermission: MethodChannel.Result? = null
     private val permission: String get() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     private fun allowed() = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
@@ -54,6 +55,10 @@ class MainActivity : AudioServiceActivity() {
                     } catch (_: Exception) { runOnUiThread { result.error("lyrics", "Local lyrics could not be read. Choose the song folder again.", null) } }
                 }
                 "hasPermission" -> result.success(allowed())
+                "isPermissionPermanentlyDenied" -> result.success(
+                    !allowed() && musicPermissionPreferences.getBoolean(permission, false) &&
+                        !shouldShowRequestPermissionRationale(permission)
+                )
                 "requestPermission" -> if (allowed()) result.success(true) else if (pendingPermission != null) result.success(false) else {
                     pendingPermission = result
                     requestPermissions(arrayOf(permission), 70)
@@ -211,6 +216,12 @@ class MainActivity : AudioServiceActivity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 70) { pendingPermission?.success(allowed()); pendingPermission = null }
+        if (requestCode == 70) {
+            if (grantResults.isNotEmpty()) {
+                musicPermissionPreferences.edit().putBoolean(permission, true).apply()
+            }
+            pendingPermission?.success(allowed())
+            pendingPermission = null
+        }
     }
 }

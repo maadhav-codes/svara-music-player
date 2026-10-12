@@ -42,7 +42,7 @@ Check the [GitHub Releases page](https://github.com/maadhav-codes/svara-music-pl
 
 1. Download an APK from a trusted maintainer onto your Android phone.
 2. Open it and complete installation. Android may ask you to allow the app opening the APK to install unknown apps.
-3. Open **Svara → Library**, tap **Allow music access / Retry**, and grant audio access.
+3. Open **Svara → Library**, tap **Allow music access**, and grant audio access.
 4. Tap a song to play it, or open **Discover** to find online music.
 
 If a release offers several APKs, choose `arm64-v8a` for most modern phones, `armeabi-v7a` for older 32-bit ARM phones, or `x86_64` for a matching emulator. A universal APK includes all supported architectures.
@@ -172,7 +172,7 @@ See the [development guide](docs/DEVELOPMENT.md) for the codebase map, storage a
 
 | Problem                          | Try this                                                                                                                      |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Audio access is denied           | Tap **Allow music access / Retry**, or **Open app settings** and grant audio access.                                          |
+| Audio access is denied           | Tap **Allow music access** to request audio access. After permanent denial, the button changes to **Open app settings**.      |
 | Songs are missing                | Confirm files are on the phone, then refresh Library. Android must index them; folders hidden with `.nomedia` may not appear. |
 | A local song will not play       | Check that the file exists, permission is granted, and your device supports its encoding.                                     |
 | Discover has no results          | Check connectivity, try another song or artist query. An empty page may still offer **Load more**.                            |

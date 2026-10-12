@@ -115,12 +115,12 @@ abstract final class SvaraTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: colors.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: colors.primaryContainer,
+        indicatorColor: Colors.transparent,
         elevation: 0,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? colors.onPrimaryContainer
+                ? colors.primary
                 : colors.onSurfaceVariant,
           ),
         ),
@@ -129,9 +129,7 @@ abstract final class SvaraTheme {
             color: states.contains(WidgetState.selected)
                 ? colors.primary
                 : colors.onSurfaceVariant,
-            fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.w700
-                : FontWeight.w500,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),

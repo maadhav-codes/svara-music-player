@@ -50,6 +50,13 @@ void main() {
         }
         expect(contrast(c.outline, c.surface), greaterThanOrEqualTo(3));
         expect(theme.scaffoldBackgroundColor, c.surface);
+        expect(theme.navigationBarTheme.indicatorColor, Colors.transparent);
+        expect(
+          theme.navigationBarTheme.iconTheme!.resolve({
+            WidgetState.selected,
+          })!.color,
+          c.primary,
+        );
       },
     );
   }
