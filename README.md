@@ -7,6 +7,7 @@ Svara (स्वर) means “musical note” or “voice.” There are no ads, 
 - **Users:** [Install Svara](#install-svara) → [Learn the basics](#using-svara).
 - **Developers:** [Set up and run](#developer-quick-start) → [Development guide](docs/DEVELOPMENT.md).
 - **Need help?** See [Troubleshooting](#troubleshooting).
+- **What changed?** Read the [changelog](changelog.md) for every published release.
 
 ## Preview
 
