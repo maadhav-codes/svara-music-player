@@ -18,12 +18,8 @@ class LibraryRepository {
   Future<void> refresh() async {
     final known = <String, int>{};
     final version = await store.read('mediaVersion');
-    for (var offset = 0; ; offset += 200) {
-      final page = await store.tracks(offset: offset);
-      for (final t in page) {
-        known[t.id] = t.modified;
-      }
-      if (page.length < 200) break;
+    for (final track in await store.tracks()) {
+      known[track.id] = track.modified;
     }
     final result = Map<String, dynamic>.from(
       await channel.invokeMethod('scan', {'known': known, 'version': version})
@@ -40,7 +36,7 @@ class LibraryRepository {
     }
   }
 
-  Future<List<Track>> page(int offset) => store.tracks(offset: offset);
+  Future<List<Track>> all() => store.tracks();
   Future<Uint8List?> artwork(String uri) =>
       channel.invokeMethod<Uint8List>('artwork', {'uri': uri});
   Future<void> openSettings() => channel.invokeMethod('openSettings');

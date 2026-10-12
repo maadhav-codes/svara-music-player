@@ -22,7 +22,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   final searchController = TextEditingController();
   String query = '', filter = 'All', sort = 'Title';
   String? group, error;
-  bool allowed = false, loading = true, more = true, paging = false;
+  bool allowed = false, loading = true;
+  Future<void>? _refreshTask;
   @override
   void initState() {
     super.initState();
@@ -42,63 +43,43 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     if (state == AppLifecycleState.resumed) unawaited(refresh());
   }
 
-  Future<void> refresh({bool request = false}) async {
-    if (paging) return;
+  Future<void> refresh({bool request = false}) =>
+      _refreshTask ??= _refresh(request: request)
+          .whenComplete(() => _refreshTask = null);
+
+  Future<void> _refresh({required bool request}) async {
     setState(() {
       loading = true;
       error = null;
     });
     try {
       final repo = ref.read(libraryRepositoryProvider);
-      allowed = await repo.permission(request: request);
+      final permission = await repo.permission(request: request);
+      if (!mounted) return;
+      setState(() => allowed = permission);
       if (!allowed) {
         tracks.clear();
         return;
       }
-      // Show persisted local data before querying MediaStore.
-      final cached = await repo.page(0);
-      if (mounted) {
-        setState(() {
-          tracks
-            ..clear()
-            ..addAll(cached);
-          loading = false;
-        });
-      }
+      final saved = await repo.all();
+      if (!mounted) return;
+      setState(() {
+        tracks
+          ..clear()
+          ..addAll(saved);
+      });
       await repo.refresh();
-      final first = await repo.page(0);
-      tracks
-        ..clear()
-        ..addAll(first);
-      more = first.length == 200;
-    } catch (e) {
-      error = 'Could not refresh phone music. Please retry.';
+      final current = await repo.all();
+      if (!mounted) return;
+      setState(() {
+        tracks
+          ..clear()
+          ..addAll(current);
+      });
+    } catch (_) {
+      if (mounted) error = 'Could not refresh phone music. Please retry.';
     } finally {
       if (mounted) setState(() => loading = false);
-    }
-  }
-
-  Future<void> loadMore() async {
-    if (!more || paging || !allowed) return;
-    paging = true;
-    try {
-      final page = await ref
-          .read(libraryRepositoryProvider)
-          .page(tracks.length);
-      tracks.addAll(page);
-      more = page.length == 200;
-    } catch (_) {
-      error = 'Could not load more phone music. Pull to refresh.';
-      more = false;
-    } finally {
-      paging = false;
-      if (mounted) setState(() {});
-    }
-  }
-
-  Future<void> loadAll() async {
-    while (more && mounted && allowed && !paging) {
-      await loadMore();
     }
   }
 
@@ -111,7 +92,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               '${t.title} ${t.artist} ${t.album} ${t.folder}'
                   .toLowerCase()
                   .contains(query.toLowerCase()) &&
-              (filter != 'Favorites' || favorites.contains(t.id)) &&
               (group == null ||
                   (filter == 'Albums'
                           ? t.album
@@ -146,294 +126,256 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     groups.sort();
     return RefreshIndicator(
       onRefresh: refresh,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n.metrics.axis == Axis.vertical && n.metrics.extentAfter < 500) {
-            unawaited(loadMore());
-          }
-          return false;
-        },
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Your music.\nYour moment.',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                      ),
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your music.\nYour moment.',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      height: 1.15,
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'ON YOUR PHONE',
-                      style: TextStyle(
-                        letterSpacing: 2,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'ON YOUR PHONE',
+                    style: TextStyle(
+                      letterSpacing: 2,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                    const SizedBox(height: 24),
-                    TextField(
-                      controller: searchController,
-                      decoration: const InputDecoration(
-                        hintText: 'Find a song, artist, album…',
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      onChanged: (value) {
-                        setState(() => query = value);
-                        unawaited(loadAll());
-                      },
+                  ),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'Find a song, artist, album…',
+                      prefixIcon: Icon(Icons.search),
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: tracks.isEmpty
-                          ? null
-                          : () async {
-                              await loadAll();
-                              final history = await ref
-                                  .read(storeProvider)
-                                  .history();
-                              await ref
-                                  .read(handlerProvider)
-                                  .setQueue(
-                                    quickMix(tracks, favorites, history),
-                                  );
-                            },
-                      icon: const Icon(Icons.auto_awesome),
-                      label: const Text('Quick Mix'),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            group ??
-                                '${tracks.length}${more ? '+' : ''} tracks',
-                          ),
-                        ),
-                        if (group != null)
-                          TextButton(
-                            onPressed: () => setState(() => group = null),
-                            child: const Text('All groups'),
-                          ),
-                        PopupMenuButton<String>(
-                          tooltip: 'Sort songs',
-                          onSelected: (value) async {
-                            setState(() => sort = value);
-                            await loadAll();
+                    onChanged: (value) {
+                      setState(() => query = value);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: tracks.isEmpty
+                        ? null
+                        : () async {
+                            final history = await ref
+                                .read(storeProvider)
+                                .history();
+                            await ref
+                                .read(handlerProvider)
+                                .setQueue(quickMix(tracks, favorites, history));
                           },
-                          itemBuilder: (_) =>
-                              ['Title', 'Artist', 'Duration', 'Recent']
-                                  .map(
-                                    (s) =>
-                                        PopupMenuItem(value: s, child: Text(s)),
-                                  )
-                                  .toList(),
-                          icon: const Icon(Icons.sort),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('Quick Mix'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: Text(group ?? '${tracks.length} tracks')),
+                      if (group != null)
+                        TextButton(
+                          onPressed: () => setState(() => group = null),
+                          child: const Text('All groups'),
                         ),
-                      ],
-                    ),
-                    if (loading) const LinearProgressIndicator(),
-                    if (error != null)
-                      TextButton(
-                        onPressed: refresh,
-                        child: Text('$error Retry'),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _FilterHeader(
-                height: 56 + (MediaQuery.textScalerOf(context).scale(14) - 14),
-                child: Material(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 4,
-                    ),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children:
-                            [
-                                  'All',
-                                  'Songs',
-                                  'Artists',
-                                  'Albums',
-                                  'Favorites',
-                                  'Folders',
-                                  'Recently played',
-                                ]
+                      PopupMenuButton<String>(
+                        tooltip: 'Sort songs',
+                        onSelected: (value) => setState(() => sort = value),
+                        itemBuilder: (_) =>
+                            ['Title', 'Artist', 'Duration', 'Recent']
                                 .map(
-                                  (name) => Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: Text(name),
-                                      selected: filter == name,
-                                      onSelected: (_) async {
-                                        setState(() {
-                                          filter = name;
-                                          group = null;
-                                        });
-                                        await loadAll();
-                                      },
-                                    ),
-                                  ),
+                                  (s) =>
+                                      PopupMenuItem(value: s, child: Text(s)),
                                 )
                                 .toList(),
+                        icon: const Icon(Icons.sort),
                       ),
+                    ],
+                  ),
+                  if (loading) const LinearProgressIndicator(),
+                  if (error != null)
+                    TextButton(onPressed: refresh, child: Text('$error Retry')),
+                ],
+              ),
+            ),
+          ),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _FilterHeader(
+              height: 56 + (MediaQuery.textScalerOf(context).scale(14) - 14),
+              child: Material(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 4,
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children:
+                          [
+                                'All',
+                                'Artists',
+                                'Albums',
+                                'Folders',
+                                'Recently played',
+                              ]
+                              .map(
+                                (name) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text(name),
+                                    selected: filter == name,
+                                    onSelected: (_) {
+                                      setState(() {
+                                        filter = name;
+                                        group = null;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              )
+                              .toList(),
                     ),
                   ),
                 ),
               ),
             ),
-            if (!allowed && !loading)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.library_music_outlined, size: 56),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Let Svara find music on your phone.',
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: () => refresh(request: true),
-                          child: const Text('Allow music access / Retry'),
-                        ),
-                        TextButton(
-                          onPressed: () => ref
-                              .read(libraryRepositoryProvider)
-                              .openSettings(),
-                          child: const Text('Open app settings'),
-                        ),
-                      ],
-                    ),
+          ),
+          if (!allowed && !loading)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.library_music_outlined, size: 56),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Let Svara find music on your phone.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () => refresh(request: true),
+                        child: const Text('Allow music access / Retry'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            ref.read(libraryRepositoryProvider).openSettings(),
+                        child: const Text('Open app settings'),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            if (allowed &&
-                !loading &&
-                list.isEmpty &&
-                filter != 'Recently played')
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: MusicEmptyState(
-                    title: query.isNotEmpty
-                        ? 'No songs found'
-                        : filter == 'Favorites'
-                        ? 'Your favorites start here'
-                        : 'A little quiet here',
-                    message: query.isNotEmpty
-                        ? 'Try another search or explore trending music in Discover.'
-                        : filter == 'Favorites'
-                        ? 'Favorite songs from their three-dot menu, or find a new sound in Discover.'
-                        : 'Add music to your phone or explore trending music in Discover.',
-                    actionLabel: widget.onDiscover != null
-                        ? 'Explore Discover'
-                        : 'Refresh music',
-                    onAction: widget.onDiscover ?? () => refresh(),
-                    icon: query.isNotEmpty
-                        ? Icons.search_rounded
-                        : Icons.library_music_outlined,
-                  ),
+            ),
+          if (allowed &&
+              !loading &&
+              list.isEmpty &&
+              filter != 'Recently played')
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: MusicEmptyState(
+                  title: query.isNotEmpty
+                      ? 'No songs found'
+                      : 'A little quiet here',
+                  message: query.isNotEmpty
+                      ? 'Try another search or explore trending music in Discover.'
+                      : 'Add music to your phone or explore trending music in Discover.',
+                  actionLabel: widget.onDiscover != null
+                      ? 'Explore Discover'
+                      : 'Refresh music',
+                  onAction: widget.onDiscover ?? () => refresh(),
+                  icon: query.isNotEmpty
+                      ? Icons.search_rounded
+                      : Icons.library_music_outlined,
                 ),
               ),
-            if (filter == 'Recently played')
-              SliverToBoxAdapter(
-                child: FutureBuilder<Map<String, int>>(
-                  future: ref.read(storeProvider).history(),
-                  builder: (context, snapshot) {
-                    final recent =
-                        list
-                            .where(
-                              (t) => snapshot.data?.containsKey(t.id) ?? false,
-                            )
-                            .toList()
-                          ..sort(
-                            (a, b) => snapshot.data![b.id]!.compareTo(
-                              snapshot.data![a.id]!,
-                            ),
-                          );
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (recent.isEmpty) {
-                      return MusicEmptyState(
-                        title: 'Your listening story starts here',
-                        message:
-                            'Play a song or explore a new sound in Discover.',
-                        actionLabel: widget.onDiscover != null
-                            ? 'Explore Discover'
-                            : 'Show all songs',
-                        onAction:
-                            widget.onDiscover ??
-                            () => setState(() => filter = 'All'),
-                      );
-                    }
-                    return Column(
-                      children: recent
-                          .map(
-                            (t) => SongTile(
-                              t,
-                              onPlay: () => ref
-                                  .read(handlerProvider)
-                                  .setQueue(recent, index: recent.indexOf(t)),
-                            ),
+            ),
+          if (filter == 'Recently played')
+            SliverToBoxAdapter(
+              child: FutureBuilder<Map<String, int>>(
+                future: ref.read(storeProvider).history(),
+                builder: (context, snapshot) {
+                  final recent =
+                      list
+                          .where(
+                            (t) => snapshot.data?.containsKey(t.id) ?? false,
                           )
-                          .toList(),
+                          .toList()
+                        ..sort(
+                          (a, b) => snapshot.data![b.id]!.compareTo(
+                            snapshot.data![a.id]!,
+                          ),
+                        );
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (recent.isEmpty) {
+                    return MusicEmptyState(
+                      title: 'Your listening story starts here',
+                      message:
+                          'Play a song or explore a new sound in Discover.',
+                      actionLabel: widget.onDiscover != null
+                          ? 'Explore Discover'
+                          : 'Show all songs',
+                      onAction:
+                          widget.onDiscover ??
+                          () => setState(() => filter = 'All'),
                     );
-                  },
-                ),
-              )
-            else if (grouping)
-              SliverList.builder(
-                itemCount: groups.length,
-                itemBuilder: (_, i) => ListTile(
-                  leading: Icon(
-                    filter == 'Folders'
-                        ? Icons.folder_outlined
-                        : Icons.album_outlined,
-                  ),
-                  title: Text(groups[i].isEmpty ? 'Unknown' : groups[i]),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => setState(() => group = groups[i]),
-                ),
-              )
-            else
-              SliverList.builder(
-                itemCount: list.length,
-                itemBuilder: (_, i) => SongTile(
-                  list[i],
-                  onPlay: () =>
-                      ref.read(handlerProvider).setQueue(list, index: i),
-                ),
+                  }
+                  return Column(
+                    children: recent
+                        .map(
+                          (t) => SongTile(
+                            t,
+                            onPlay: () => ref
+                                .read(handlerProvider)
+                                .setQueue(recent, index: recent.indexOf(t)),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
               ),
-            if (more && allowed)
-              SliverToBoxAdapter(
-                child: TextButton(
-                  onPressed: loadMore,
-                  child: const Text('Load more music'),
+            )
+          else if (grouping)
+            SliverList.builder(
+              itemCount: groups.length,
+              itemBuilder: (_, i) => ListTile(
+                leading: Icon(
+                  filter == 'Folders'
+                      ? Icons.folder_outlined
+                      : Icons.album_outlined,
                 ),
+                title: Text(groups[i].isEmpty ? 'Unknown' : groups[i]),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => setState(() => group = groups[i]),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
-        ),
+            )
+          else
+            SliverList.builder(
+              itemCount: list.length,
+              itemBuilder: (_, i) => SongTile(
+                list[i],
+                onPlay: () =>
+                    ref.read(handlerProvider).setQueue(list, index: i),
+              ),
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
       ),
     );
   }
@@ -461,14 +403,13 @@ class SongTile extends ConsumerWidget {
   const SongTile(
     this.track, {
     required this.onPlay,
-    this.onViewArtist,
     this.onRemove,
     this.removeLabel,
     super.key,
   });
   final Track track;
   final VoidCallback onPlay;
-  final VoidCallback? onViewArtist, onRemove;
+  final VoidCallback? onRemove;
   final String? removeLabel;
   @override
   Widget build(BuildContext context, WidgetRef ref) => ListTile(
@@ -496,7 +437,6 @@ class SongTile extends ConsumerWidget {
         context,
         ref,
         track,
-        onViewArtist: onViewArtist,
         onRemove: onRemove,
         removeLabel: removeLabel,
       ),
@@ -508,7 +448,6 @@ Future<void> showTrackOptions(
   BuildContext context,
   WidgetRef ref,
   Track track, {
-  VoidCallback? onViewArtist,
   VoidCallback? onRemove,
   String? removeLabel,
 }) async {
@@ -537,8 +476,6 @@ Future<void> showTrackOptions(
                 favorite ? Icons.favorite : Icons.favorite_border,
                 favorite ? 'Unfavorite' : 'Favorite',
               ),
-              if (onViewArtist != null)
-                ('artist', Icons.person_outline, 'View Artist'),
               (
                 'info',
                 Icons.info_outline,
@@ -590,8 +527,6 @@ Future<void> showTrackOptions(
           ),
         );
       }
-    case 'artist':
-      onViewArtist?.call();
     case 'remove':
       onRemove?.call();
     case 'info':

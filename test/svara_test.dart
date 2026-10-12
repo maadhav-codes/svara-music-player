@@ -103,6 +103,28 @@ void main() {
     await store.reconcile([], {'1'});
     expect((await store.tracks()).length, 1);
   });
+  test('library repository reads all tracks and sends every fingerprint to MediaStore', () async {
+    final tracks = List.generate(501, (i) => song('$i'));
+    await store.reconcile(tracks, tracks.map((t) => t.id).toSet());
+    const channel = MethodChannel('test.svara/all-media');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'scan');
+      final known = (call.arguments as Map)['known'] as Map;
+      expect(known.length, 501);
+      expect(known['500'], 1);
+      return {'unchanged': true};
+    });
+    try {
+      final repo = LibraryRepository(store, channel: channel);
+      expect(await repo.all(), hasLength(501));
+      await repo.refresh();
+    } finally {
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
+
   test(
     'library bridge uses metadata fingerprints and prunes missing IDs',
     () async {
@@ -122,7 +144,7 @@ void main() {
       final repo = LibraryRepository(store, channel: channel);
       expect(await repo.permission(request: true), false);
       await repo.refresh();
-      expect((await repo.page(0)).single.modified, 3);
+      expect((await repo.all()).single.modified, 3);
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null);
     },

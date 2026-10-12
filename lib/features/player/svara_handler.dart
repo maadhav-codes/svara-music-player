@@ -202,13 +202,18 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
       await save();
       return;
     }
-    final bounded = boundedQueue(next, index.clamp(0, next.length - 1));
-    if (bounded.$1.isEmpty) {
+    final selected = index.clamp(0, next.length - 1);
+    final playable = next.where((track) => track.streamable).toList();
+    if (playable.isEmpty) {
       errors.add('No playable tracks in this selection.');
       return;
     }
-    tracks = List.of(bounded.$1);
-    _index = bounded.$2;
+    tracks = playable;
+    _index = next
+        .take(selected)
+        .where((track) => track.streamable)
+        .length
+        .clamp(0, tracks.length - 1);
     _position = position;
     _wantsPlay = start;
     _automaticRetries = 0;

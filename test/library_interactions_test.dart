@@ -215,17 +215,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Evening'), findsOneWidget);
       expect(find.text('First light'), findsNothing);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Songs'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
       await settle(tester);
       expect(find.text('First light'), findsOneWidget);
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -380));
       await tester.pumpAndSettle();
       expect(
-        find.widgetWithText(ChoiceChip, 'Songs').hitTestable(),
+        find.widgetWithText(ChoiceChip, 'All').hitTestable(),
         findsOneWidget,
       );
       expect(
-        tester.getTopLeft(find.widgetWithText(ChoiceChip, 'Songs')).dy,
+        tester.getTopLeft(find.widgetWithText(ChoiceChip, 'All')).dy,
         lessThan(80),
       );
       await tester.drag(find.byType(CustomScrollView), const Offset(0, 600));

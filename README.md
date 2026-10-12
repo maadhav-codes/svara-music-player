@@ -21,7 +21,7 @@ Svara (स्वर) means “musical note” or “voice.” The app has no ads
 
 ## What the app does
 
-- Finds audio indexed by Android’s MediaStore and browses it by album, artist, or folder, with search, favorites, and recently played filters.
+- Finds audio indexed by Android’s MediaStore and browses it by album, artist, or folder, with search and a recently played filter.
 - Plays local audio through Android’s supported decoders. Common formats include MP3, AAC/M4A, FLAC, WAV, and OGG; compatibility depends on the device and file encoding.
 - Offers **Quick Mix**, combining local favorites with less recently played local tracks.
 - Searches and streams YouTube music results.
@@ -53,7 +53,7 @@ To keep playlists and settings during updates, install an APK with the same appl
 
 Copy music onto your phone using a file manager or USB transfer. Svara reads Android’s media index rather than importing files into a separate music folder. Return to **Library**, pull to refresh, or use its refresh button after adding or changing music.
 
-Use the filter chips to browse your library, then search or sort the results. Tap **Quick Mix** to start a mix of local tracks. Open a song’s **⋮ Song options** menu to favorite it, add it to a playlist, play it next, add it to the queue, or view file details.
+Use **All**, **Artists**, **Albums**, **Folders**, or **Recently played** to browse your library, then search or sort the results. Favorites are in **Playlists → Favorites**. The complete local library loads on refresh; search, sorting, and filtering use that in-memory list. Tap **Quick Mix** to start a mix of local tracks. Open a song’s **⋮ Song options** menu to favorite it, add it to a playlist, play it next, add it to the queue, or view file details.
 
 ### Playback and gestures
 
@@ -192,7 +192,7 @@ assets/licenses/            # Bundled software license notices
 
 Riverpod wires repositories and app state. SQLite (`sqflite`) holds durable data; Dio handles lyrics requests. `just_audio` plays audio, `audio_service` exposes background/media controls, and `audio_session` handles audio focus.
 
-`Track.source` identifies local or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. `SvaraHandler` passes local URIs directly to the audio engine and resolves YouTube references at playback time, and the audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
+`Track.source` identifies local or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. Queues preserve every playable track without a size cap. `SvaraHandler` passes local URIs directly to the audio engine and resolves YouTube references at playback time, and the audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
 
 The YouTube plugin registers with both foreground and background Flutter engines. Native dependencies are pinned in `packages/svara_youtube/android/build.gradle`: NewPipeExtractor **v0.26.5**, OkHttp **4.12.0**, and NIO desugaring **2.1.5**. Native requests use bounded workers, cancellation, and deadlines; transient repository requests retry at most twice.
 

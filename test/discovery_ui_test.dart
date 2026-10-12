@@ -79,11 +79,9 @@ void main() {
         await tester.ensureVisible(find.byTooltip('Song options').first);
         await tester.tap(find.byTooltip('Song options').first);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('View Artist'));
-        await tester.pumpAndSettle();
-        expect(find.text('Open video in YouTube'), findsOneWidget);
-        expect(tester.takeException(), null);
-        Navigator.of(tester.element(find.text('Open video in YouTube'))).pop();
+        expect(find.text('View Artist'), findsNothing);
+        expect(find.text('Track Info'), findsOneWidget);
+        Navigator.of(tester.element(find.text('Track Info'))).pop();
         await tester.pumpAndSettle();
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         await tester.pumpAndSettle();

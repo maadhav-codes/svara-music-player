@@ -85,49 +85,6 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     }
   }
 
-  Future<void> artist(Track t) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(t.artist, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 12),
-              const Text(
-                'YouTube uploader • Channel attribution may differ from the recording artist. This may be a cover, remix, or live performance.',
-              ),
-              TextButton(
-                onPressed: () => openSource(t),
-                child: const Text('Open video in YouTube'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> openSource(Track track) async {
-    try {
-      await ref.read(libraryRepositoryProvider).openUrl(track.sourceUrl);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'A browser or YouTube app is needed to open this video.',
-            ),
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) => RefreshIndicator(
     onRefresh: () => load(reset: true),
@@ -230,7 +187,6 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
           final t = tracks[i - 1];
           return SongTile(
             t,
-            onViewArtist: () => artist(t),
             onPlay: () {
               final playable = tracks.where((s) => s.streamable).toList();
               unawaited(

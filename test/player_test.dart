@@ -228,13 +228,22 @@ void main() {
       expect(handler.sleepUntil, null);
     },
   );
-  test('large queue window includes selected song and is bounded', () {
-    final tracks = List.generate(1200, (i) => t('$i'));
-    final window = boundedQueue(tracks, 800);
-    expect(window.$1.length, 400);
-    expect(window.$1[window.$2].id, '800');
-    expect(boundedQueue(tracks, 10).$1.length, 500);
-  });
+  test(
+    'large queues retain every item and can skip backwards before selection',
+    () async {
+      await handler.restore();
+      final tracks = List.generate(6000, (i) => t('$i'));
+      await handler.setQueue(tracks, index: 5500, start: false);
+      expect(handler.tracks.length, 6000);
+      expect((await store.read('playback') as Map)['tracks'], hasLength(6000));
+      expect(handler.current!.id, '5500');
+      await handler.skipToQueueItem(0);
+      expect(handler.current!.id, '0');
+      await handler.skipToQueueItem(550);
+      await handler.skipToPrevious();
+      expect(handler.current!.id, '549');
+    },
+  );
 
   Track remote(String id) => Track(
     id: 'youtube:$id',

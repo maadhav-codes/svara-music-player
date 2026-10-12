@@ -191,13 +191,10 @@ class Store {
     'key': key,
     'value': jsonEncode(value),
   }, conflictAlgorithm: ConflictAlgorithm.replace);
-  Future<List<Track>> tracks({int offset = 0, int limit = 200}) async =>
-      (await db.query(
-        'tracks',
-        limit: limit,
-        offset: offset,
-        orderBy: 'id',
-      )).map((r) => Track.fromJson(jsonDecode(r['data'] as String))).toList();
+  Future<List<Track>> tracks() async => (await db.query(
+    'tracks',
+    orderBy: 'id',
+  )).map((r) => Track.fromJson(jsonDecode(r['data'] as String))).toList();
   Future<void> reconcile(List<Track> changed, Set<String> ids) async {
     await db.transaction((tx) async {
       final batch = tx.batch();

@@ -650,109 +650,47 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                   const Text('Sleep timer is on'),
                               ],
                             );
-                            double textHeight(
-                              String text,
-                              TextStyle? style,
-                              int maxLines,
-                              double width,
-                            ) {
-                              final painter = TextPainter(
-                                text: TextSpan(
-                                  text: text,
-                                  style: DefaultTextStyle.of(context).style
-                                      .merge(style),
+                            Widget responsiveArtwork() => Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 300,
+                                  maxHeight: 300,
                                 ),
-                                maxLines: maxLines,
-                                textDirection: Directionality.of(context),
-                                textScaler: MediaQuery.textScalerOf(context),
-                              )..layout(maxWidth: width);
-                              final height = painter.height;
-                              painter.dispose();
-                              return height;
-                            }
+                                child: AspectRatio(
+                                  aspectRatio: 1,
+                                  child: FittedBox(child: artwork(300)),
+                                ),
+                              ),
+                            );
 
                             Widget details({
                               required bool includeArtwork,
                             }) => Column(
                               children: [
                                 Expanded(
-                                  child: LayoutBuilder(
-                                    builder: (context, available) {
-                                      final theme = Theme.of(context).textTheme;
-                                      final metadataHeight =
-                                          textHeight(
-                                            t.title,
-                                            theme.headlineSmall?.copyWith(
-                                              fontWeight: FontWeight.w700,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      if (includeArtwork)
+                                        Flexible(
+                                          flex: viewport.maxHeight >= 600
+                                              ? 3
+                                              : 1,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 16,
                                             ),
-                                            2,
-                                            available.maxWidth,
-                                          ) +
-                                          8 +
-                                          textHeight(
-                                            t.artist,
-                                            theme.titleMedium,
-                                            1,
-                                            available.maxWidth,
-                                          ) +
-                                          48 +
-                                          (t.online
-                                              ? 8 +
-                                                    textHeight(
-                                                      'STREAMING FROM ${t.source.label.toUpperCase()}',
-                                                      const TextStyle(
-                                                        fontSize: 11,
-                                                        letterSpacing: 2,
-                                                      ),
-                                                      2,
-                                                      available.maxWidth,
-                                                    )
-                                              : 0) +
-                                          (t.source == MediaSource.youtube
-                                              ? (textHeight(
-                                                          'Open video in YouTube',
-                                                          theme.labelLarge,
-                                                          2,
-                                                          (available.maxWidth -
-                                                                  56)
-                                                              .clamp(
-                                                                1.0,
-                                                                available
-                                                                    .maxWidth,
-                                                              ),
-                                                        ) +
-                                                        16)
-                                                    .clamp(
-                                                      48.0,
-                                                      double.infinity,
-                                                    )
-                                              : 0);
-                                      final artworkSpace =
-                                          (available.maxHeight -
-                                                  metadataHeight -
-                                                  16)
-                                              .clamp(0.0, 300.0);
-                                      final size = artworkSpace.clamp(
-                                        0.0,
-                                        (available.maxWidth - 32).clamp(
-                                          0.0,
-                                          300.0,
+                                            child: responsiveArtwork(),
+                                          ),
                                         ),
-                                      );
-                                      return SingleChildScrollView(
-                                        controller: _scroll,
-                                        child: Column(
-                                          children: [
-                                            if (includeArtwork &&
-                                                size >= 48) ...[
-                                              artwork(size),
-                                              const SizedBox(height: 16),
-                                            ],
-                                            metadata(),
-                                          ],
+                                      Flexible(
+                                        flex: viewport.maxHeight >= 600 ? 3 : 6,
+                                        child: SingleChildScrollView(
+                                          controller: _scroll,
+                                          child: metadata(),
                                         ),
-                                      );
-                                    },
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 controls(),
@@ -768,21 +706,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                               child: landscape
                                   ? Row(
                                       children: [
-                                        Expanded(
-                                          child: LayoutBuilder(
-                                            builder: (context, available) {
-                                              final size = available.maxHeight
-                                                  .clamp(
-                                                    0.0,
-                                                    available.maxWidth,
-                                                  )
-                                                  .clamp(0.0, 300.0);
-                                              return Center(
-                                                child: artwork(size),
-                                              );
-                                            },
-                                          ),
-                                        ),
+                                        Expanded(child: responsiveArtwork()),
                                         const SizedBox(width: 24),
                                         Expanded(
                                           child: details(includeArtwork: false),

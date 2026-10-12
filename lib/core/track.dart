@@ -111,24 +111,3 @@ int reorderedActiveIndex(int active, int oldIndex, int newIndex) {
   if (oldIndex > active && destination <= active) return active + 1;
   return active;
 }
-
-(List<Track>, int) boundedQueue(
-  List<Track> tracks,
-  int selected, {
-  int limit = 500,
-}) {
-  if (tracks.isEmpty) return (<Track>[], 0);
-  selected = selected.clamp(0, tracks.length - 1);
-  final start = selected < limit ? 0 : selected;
-  final end = (start + limit).clamp(0, tracks.length);
-  final slice = tracks.sublist(start, end);
-  final playable = slice.where((t) => t.streamable).toList();
-  return (
-    playable,
-    slice
-        .take(selected - start)
-        .where((t) => t.streamable)
-        .length
-        .clamp(0, playable.isEmpty ? 0 : playable.length - 1),
-  );
-}
