@@ -9,7 +9,8 @@ import 'package:just_audio/just_audio.dart';
 import '../../core/media_source.dart';
 import '../../core/store.dart';
 import '../../core/track.dart';
-import 'source_resolver.dart';
+import '../../core/resolved_track.dart';
+import '../discovery/youtube_repository.dart';
 
 /// Owns the durable logical queue. The engine receives only the selected source;
 /// queue indices are never inferred from the engine's single-source index.
@@ -17,7 +18,7 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
   SvaraHandler(
     this.store, {
     AudioPlayer? audioPlayer,
-    this.resolve,
+    ResolveTrack? resolveYouTube,
     Random? random,
   }) : player =
            audioPlayer ??
@@ -25,6 +26,7 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
              handleInterruptions: false,
              useProxyForRequestHeaders: false,
            ),
+       resolveYouTube = resolveYouTube ?? YouTubeRepository(store).resolve,
        random = random ?? Random() {
     _subscriptions.add(player.playbackEventStream.listen((_) => _broadcast()));
     _subscriptions.add(
@@ -55,7 +57,7 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
   }
   final Store store;
   final AudioPlayer player;
-  final ResolveTrack? resolve;
+  final ResolveTrack resolveYouTube;
   final Random random;
   final _subscriptions = <StreamSubscription<dynamic>>[];
   final _pending = <Future<void>>{};
@@ -234,12 +236,16 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
     // A failed resolution must still leave the selected queue available to retry.
     await save();
     try {
-      final resolved = resolve == null
+      final resolved = reference.source == MediaSource.local
           ? ResolvedTrack(
               reference,
               ResolvedStream(uri: Uri.parse(reference.uri)),
             )
-          : await resolve!(reference, cancel: cancel, alternative: alternative);
+          : await resolveYouTube(
+              reference,
+              cancel: cancel,
+              alternative: alternative,
+            );
       if (generation != _loadGeneration || _disposed) return;
       if (!resolved.track.streamable) {
         throw const SourceException(

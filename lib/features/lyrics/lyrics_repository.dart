@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/track.dart';
+import '../../core/memory_cache.dart';
 import 'lyrics.dart';
 
 class LyricsException implements Exception {
@@ -32,7 +33,10 @@ class LyricsRepository {
            );
   final Dio dio;
   final MethodChannel channel;
-  final _cache = <String, ({DateTime expires, Lyrics lyrics})>{};
+  final _cache = MemoryCache<String, Lyrics>(
+    capacity: 20,
+    ttl: const Duration(hours: 6),
+  );
   DateTime? _retryAfter;
   static const maxText = 256 * 1024;
   Future<bool> chooseFolder(Track track) async =>
@@ -65,11 +69,9 @@ class LyricsRepository {
     }
     final key =
         '${track.title}\u0000${track.artist}\u0000${track.album}\u0000${track.durationMs}';
-    final cached = _cache.remove(key);
-    if (!refresh && cached != null && cached.expires.isAfter(DateTime.now())) {
-      _cache[key] = cached;
-      return cached.lyrics;
-    }
+    if (refresh) _cache.remove(key);
+    final cached = _cache.get(key);
+    if (cached != null) return cached;
     if (track.title.trim().isEmpty || track.artist.trim().isEmpty) return null;
     if (_retryAfter?.isAfter(DateTime.now()) == true) {
       throw const LyricsException('LRCLIB is busy. Please try again later.');
@@ -117,13 +119,7 @@ class LyricsRepository {
         source: 'LRCLIB',
       );
       if (lyrics.empty) return null;
-      _cache[key] = (
-        expires: DateTime.now().add(const Duration(hours: 6)),
-        lyrics: lyrics,
-      );
-      while (_cache.length > 20) {
-        _cache.remove(_cache.keys.first);
-      }
+      _cache.put(key, lyrics);
       return lyrics;
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) rethrow;

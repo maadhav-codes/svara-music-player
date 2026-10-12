@@ -11,9 +11,10 @@ class Store {
   static Future<Store> open({String? path}) async {
     final db = await openDatabase(
       path ?? p.join(await getDatabasesPath(), 'svara.db'),
-      version: 2,
+      version: 3,
       onUpgrade: (db, oldVersion, _) async {
         if (oldVersion < 2) await _removeAudius(db);
+        if (oldVersion < 3) await _migrateFavorites(db);
       },
       onCreate: (db, _) async {
         await db.execute(
@@ -87,6 +88,100 @@ class Store {
     }
   }
 
+  // Upgrade legacy ID-only favorites once. Normal reads use the pinned playlist.
+  static Future<void> _migrateFavorites(DatabaseExecutor db) async {
+    final settings = {
+      for (final row in await db.query('settings'))
+        row['key'] as String: jsonDecode(row['value'] as String),
+    };
+    final known = <String, Track>{};
+    void collect(List? values) {
+      for (final value in values ?? []) {
+        final track = Track.fromJson(Map<String, dynamic>.from(value as Map));
+        known[track.id] = track;
+      }
+    }
+
+    final playback = settings['playback'] as Map?;
+    collect(playback?['tracks'] as List?);
+    final playlists = (settings['playlists'] as List? ?? []).cast<Map>();
+    for (final playlist in playlists) {
+      collect(playlist['tracks'] as List?);
+    }
+    final saved = settings['favoriteTracks'] as List? ?? [];
+    collect(saved);
+    for (final row in await db.query('tracks')) {
+      final track = Track.fromJson(jsonDecode(row['data'] as String));
+      known[track.id] = track;
+      await db.update(
+        'tracks',
+        {'data': jsonEncode(track.toJson())},
+        where: 'id = ?',
+        whereArgs: [track.id],
+      );
+    }
+    final ids =
+        (settings['favorites'] as List? ?? saved.map((t) => t['id']).toList())
+            .cast<String>()
+            .toSet();
+    final order = <String>{for (final t in saved) t['id'] as String, ...ids};
+    final favorites = [
+      for (final id in order)
+        if (ids.contains(id))
+          (known[id] ??
+                  Track(
+                    id: id,
+                    title: id.startsWith('youtube:')
+                        ? 'YouTube track'
+                        : 'Unavailable local track',
+                    artist: id.startsWith('youtube:')
+                        ? 'YouTube'
+                        : 'Unknown artist',
+                    uri: '',
+                    streamable: id.startsWith('youtube:'),
+                  ))
+              .toSavedJson(),
+    ];
+    final normalized = [
+      if (!playlists.any((p) => p['id'] == 'favorites'))
+        {'id': 'favorites', 'name': 'Favorites', 'tracks': favorites},
+      for (final playlist in playlists)
+        {
+          ...playlist,
+          'tracks': [
+            for (final t in playlist['tracks'] as List)
+              Track.fromJson(Map<String, dynamic>.from(t as Map)).toSavedJson(),
+          ],
+        },
+    ];
+    await db.insert('settings', {
+      'key': 'playlists',
+      'value': jsonEncode(normalized),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    if (playback != null) {
+      await db.update(
+        'settings',
+        {
+          'value': jsonEncode({
+            ...playback,
+            'tracks': [
+              for (final t in playback['tracks'] as List)
+                Track.fromJson(Map<String, dynamic>.from(t as Map))
+                    .toSavedJson(),
+            ],
+          }),
+        },
+        where: 'key = ?',
+        whereArgs: ['playback'],
+      );
+    }
+    await db.delete(
+      'settings',
+      where: 'key IN (?, ?)',
+      whereArgs: ['favorites', 'favoriteTracks'],
+    );
+  }
+
   Future<dynamic> read(String key) async {
     final rows = await db.query('settings', where: 'key = ?', whereArgs: [key]);
     return rows.isEmpty ? null : jsonDecode(rows.first['value'] as String);
@@ -135,31 +230,4 @@ class Store {
     for (final r in await db.query('history'))
       r['id'] as String: r['played'] as int,
   };
-  final _cache = <String, (DateTime, String)>{};
-  int get cacheEntries => _cache.length;
-  void clearSessionCache() => _cache.clear();
-  Future<dynamic> cached(String key) async {
-    final entry = _cache[key];
-    if (entry == null) return null;
-    if (!entry.$1.isAfter(DateTime.now())) {
-      _cache.remove(key);
-      return null;
-    }
-    return jsonDecode(entry.$2);
-  }
-
-  Future<void> cache(
-    String key,
-    dynamic value, {
-    Duration ttl = const Duration(hours: 6),
-  }) async {
-    final data = jsonEncode(value);
-    if (data.length > 500000) return;
-    _cache.removeWhere((key, entry) => !entry.$1.isAfter(DateTime.now()));
-    _cache.remove(key);
-    while (_cache.length >= 20) {
-      _cache.remove(_cache.keys.first);
-    }
-    _cache[key] = (DateTime.now().add(ttl), data);
-  }
 }

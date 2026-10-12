@@ -8,7 +8,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
 import 'package:svara/features/player/svara_handler.dart';
-import 'package:svara/features/player/source_resolver.dart';
+import 'package:svara/core/resolved_track.dart';
 import 'package:svara/core/media_source.dart';
 import 'package:dio/dio.dart';
 
@@ -253,7 +253,11 @@ void main() {
   Future<void> replace(ResolveTrack resolver) async {
     await handler.dispose();
     player = MemoryPlayer();
-    handler = SvaraHandler(store, audioPlayer: player, resolve: resolver);
+    handler = SvaraHandler(
+      store,
+      audioPlayer: player,
+      resolveYouTube: resolver,
+    );
     await handler.restore();
   }
 

@@ -40,6 +40,35 @@ void main() {
     await store.db.close();
   });
 
+  test('search cache is repository-owned, bounded, and expires after fifteen minutes', () async {
+    var now = DateTime(2026);
+    repo = YouTubeRepository(store, channel: channel, now: () => now);
+    var calls = 0;
+    messenger.setMockMethodCallHandler(channel, (_) async {
+      calls++;
+      return {
+        'tracks': [dto],
+        'continuation': null,
+      };
+    });
+    await repo.search('song 0');
+    await repo.search('song 0');
+    expect(calls, 1);
+    final other = YouTubeRepository(store, channel: channel);
+    await other.search('song 0');
+    expect(calls, 2);
+    for (var i = 1; i <= 20; i++) {
+      await repo.search('song $i');
+    }
+    expect(repo.cacheEntries, 20);
+    await repo.search('song 0');
+    expect(calls, 23); // First key was evicted.
+    now = now.add(const Duration(minutes: 15));
+    await repo.search('song 0');
+    expect(calls, 24);
+    expect(repo.cacheEntries, 1);
+  });
+
   test(
     'paginated search preserves attribution and bounded session cache',
     () async {
@@ -105,46 +134,35 @@ void main() {
     expect((sent.last['query'] as String).length, 300);
   });
 
-  test(
-    'music search bypasses old generic cache and stably favors audio uploads',
-    () async {
-      await store.cache('youtube:search:Batman:', {
-        'tracks': [dto],
-        'continuation': 'old-video-page',
-      });
-      var calls = 0;
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        calls++;
-        expect((call.arguments as Map)['query'], 'Batman music');
-        return {
-          'tracks': [
-            {...dto, 'videoId': 'aaaaaaaaaaa', 'uploader': 'Other artist'},
-            {...dto, 'videoId': 'bbbbbbbbbbb', 'uploader': 'Composer - Topic'},
-            {...dto, 'videoId': 'ccccccccccc', 'uploader': 'ArtistVEVO'},
-            {
-              ...dto,
-              'videoId': 'ddddddddddd',
-              'title': 'Theme (Official Audio)',
-            },
-            {...dto, 'videoId': 'eeeeeeeeeee', 'uploader': 'Another artist'},
-          ],
-          'continuation': 'music-page',
-        };
-      });
-      final first = await repo.search('Batman');
-      expect(first.tracks.map((t) => t.providerId), [
-        'bbbbbbbbbbb',
-        'ccccccccccc',
-        'ddddddddddd',
-        'aaaaaaaaaaa',
-        'eeeeeeeeeee',
-      ]);
-      expect(first.continuation, 'music-page');
-      final cached = await repo.search('Batman');
-      expect(cached.tracks.map((t) => t.id), first.tracks.map((t) => t.id));
-      expect(calls, 1);
-    },
-  );
+  test('music search stably favors audio uploads and caches results', () async {
+    var calls = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls++;
+      expect((call.arguments as Map)['query'], 'Batman music');
+      return {
+        'tracks': [
+          {...dto, 'videoId': 'aaaaaaaaaaa', 'uploader': 'Other artist'},
+          {...dto, 'videoId': 'bbbbbbbbbbb', 'uploader': 'Composer - Topic'},
+          {...dto, 'videoId': 'ccccccccccc', 'uploader': 'ArtistVEVO'},
+          {...dto, 'videoId': 'ddddddddddd', 'title': 'Theme (Official Audio)'},
+          {...dto, 'videoId': 'eeeeeeeeeee', 'uploader': 'Another artist'},
+        ],
+        'continuation': 'music-page',
+      };
+    });
+    final first = await repo.search('Batman');
+    expect(first.tracks.map((t) => t.providerId), [
+      'bbbbbbbbbbb',
+      'ccccccccccc',
+      'ddddddddddd',
+      'aaaaaaaaaaa',
+      'eeeeeeeeeee',
+    ]);
+    expect(first.continuation, 'music-page');
+    final cached = await repo.search('Batman');
+    expect(cached.tracks.map((t) => t.id), first.tracks.map((t) => t.id));
+    expect(calls, 1);
+  });
 
   test(
     'empty filtered pages retain their continuation for further music results',
@@ -203,7 +221,7 @@ void main() {
         (await playlists.all()).single.tracks.single.source,
         MediaSource.youtube,
       );
-      expect(store.cacheEntries, 0);
+      expect(repo.cacheEntries, 0);
     },
   );
 
@@ -282,7 +300,7 @@ void main() {
         'tracks': [dto],
       });
       await assertion;
-      expect(store.cacheEntries, 0);
+      expect(repo.cacheEntries, 0);
     },
   );
 

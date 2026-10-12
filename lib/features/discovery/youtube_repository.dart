@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -7,7 +8,8 @@ import 'package:flutter/services.dart';
 import '../../core/media_source.dart';
 import '../../core/store.dart';
 import '../../core/track.dart';
-import '../player/source_resolver.dart';
+import '../../core/resolved_track.dart';
+import '../../core/memory_cache.dart';
 
 class YouTubePage {
   const YouTubePage(this.tracks, this.continuation);
@@ -34,6 +36,13 @@ class YouTubeRepository {
   final Random random;
   StreamQuality quality = StreamQuality.standard;
   int _requestId = 0;
+
+  late final _searchCache = MemoryCache<String, String>(
+    capacity: 20,
+    ttl: const Duration(minutes: 15),
+    now: now,
+  );
+  int get cacheEntries => _searchCache.length;
 
   Future<void> loadSettings() async {
     final saved = await store.read('streamQuality');
@@ -187,14 +196,16 @@ class YouTubeRepository {
     // Keep generic-video cache entries and their native page tokens out of the
     // music catalog. Use the same effective query on every continuation page.
     final key = 'youtube:music-search:v1:$musicQuery:${continuation ?? ''}';
-    var data = await store.cached(key) as Map?;
+    final cached = _searchCache.get(key);
+    var data = cached == null ? null : jsonDecode(cached) as Map;
     if (cancel?.isCancelled ?? false) throw cancel!.cancelError!;
     if (data == null) {
       data = await _call('search', {
         'query': musicQuery,
         'continuation': continuation,
       }, cancel: cancel);
-      await store.cache(key, data, ttl: const Duration(minutes: 15));
+      final encoded = jsonEncode(data);
+      if (encoded.length <= 500000) _searchCache.put(key, encoded);
     }
     final tracks = (data['tracks'] as List)
         .map((t) => _track(Map<String, dynamic>.from(t as Map)))

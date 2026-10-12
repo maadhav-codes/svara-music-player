@@ -1,5 +1,3 @@
-// Preserve the public constructor used by local and YouTube repositories.
-// ignore_for_file: prefer_initializing_formals
 import 'media_source.dart';
 
 class Track {
@@ -12,22 +10,20 @@ class Track {
     this.folder = '',
     this.durationMs = 0,
     this.artwork,
-    bool online = false,
     MediaSource? source,
     this.streamable = true,
     this.modified = 0,
-  }) : _online = online,
-       _source = source;
+    // Keep the public source argument while inferring legacy ID-only records.
+    // ignore: prefer_initializing_formals
+  }) : _source = source;
   final String id, title, artist, uri, album, folder;
   final String? artwork;
   final int durationMs, modified;
-  final bool _online, streamable;
+  final bool streamable;
   final MediaSource? _source;
   MediaSource get source =>
       _source ??
-      (id.startsWith('youtube:') || _online
-          ? MediaSource.youtube
-          : MediaSource.local);
+      (id.startsWith('youtube:') ? MediaSource.youtube : MediaSource.local);
   bool get online => source != MediaSource.local;
   String get providerId => id.substring(id.indexOf(':') + 1);
   String get sourceUrl => switch (source) {
@@ -43,7 +39,6 @@ class Track {
     'folder': folder,
     'durationMs': durationMs,
     'artwork': artwork,
-    'online': online,
     'source': source.name,
     'streamable': streamable,
     'modified': modified,
@@ -56,7 +51,6 @@ class Track {
           'artist': artist,
           'durationMs': durationMs,
           'uri': sourceUrl,
-          'online': true,
           'source': source.name,
           'streamable': true,
         }
@@ -71,8 +65,9 @@ class Track {
     durationMs: (j['durationMs'] as num?)?.toInt() ?? 0,
     modified: (j['modified'] as num?)?.toInt() ?? 0,
     artwork: j['artwork'] as String?,
-    online: j['online'] == true,
-    source: MediaSource.values.where((s) => s.name == j['source']).firstOrNull,
+    source:
+        MediaSource.values.where((s) => s.name == j['source']).firstOrNull ??
+        (j['online'] == true ? MediaSource.youtube : null),
     streamable: j['streamable'] != false,
   );
 }

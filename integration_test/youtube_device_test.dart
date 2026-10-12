@@ -7,7 +7,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
 import 'package:svara/features/discovery/youtube_repository.dart';
-import 'package:svara/features/player/source_resolver.dart';
 import 'package:svara/features/player/svara_handler.dart';
 
 void main() {
@@ -31,9 +30,8 @@ void main() {
       );
       final store = await Store.open(path: ':memory:');
       final youtube = YouTubeRepository(store);
-      final resolver = SourceResolver(youtube: youtube);
       final handler = await AudioService.init<SvaraHandler>(
-        builder: () => SvaraHandler(store, resolve: resolver.resolve),
+        builder: () => SvaraHandler(store, resolveYouTube: youtube.resolve),
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'app.svara.playback',
           androidNotificationChannelName: 'Svara playback',

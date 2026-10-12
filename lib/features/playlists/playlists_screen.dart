@@ -90,6 +90,7 @@ Future<void> addToPlaylist(
     }
   }
   await repo.save(lists);
+  ref.invalidate(playlistsProvider);
   if (context.mounted) {
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Saved to playlist')));
@@ -104,23 +105,17 @@ class PlaylistsScreen extends ConsumerStatefulWidget {
 }
 
 class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
-  List<Playlist> lists = [];
   PlaylistsRepository get repo => PlaylistsRepository(ref.read(storeProvider));
-  @override
-  void initState() {
-    super.initState();
-    load();
-  }
-
   Future<void> load() async {
     ref.invalidate(favoriteTracksProvider);
-    final value = await repo.all();
-    if (mounted) setState(() => lists = value);
+    ref.invalidate(playlistsProvider);
+    await ref.read(playlistsProvider.future);
   }
 
   Future<void> createPlaylist() async {
     final name = await playlistName(context);
     if (name == null || !mounted) return;
+    final lists = await repo.all();
     lists.add(
       Playlist(DateTime.now().microsecondsSinceEpoch.toString(), name, []),
     );
@@ -129,109 +124,123 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
-    onRefresh: load,
-    child: ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Keep a feeling.',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              const Text('Personal playlists, saved on your phone.'),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: createPlaylist,
-                icon: const Icon(Icons.add),
-                label: const Text('New playlist'),
-              ),
-            ],
-          ),
-        ),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 8,
-          ),
-          leading: const Icon(Icons.favorite, size: 36),
-          title: const Text('Favorites'),
-          subtitle: Text(
-            ref
-                .watch(favoriteTracksProvider)
-                .when(
-                  data: (tracks) =>
-                      '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'} • Saved with the heart',
-                  loading: () => 'Loading favorites…',
-                  error: (_, _) => 'Could not load favorites. Pull to retry.',
+  Widget build(BuildContext context) {
+    final playlists = ref.watch(playlistsProvider);
+    final lists = playlists.asData?.value ?? [];
+    return RefreshIndicator(
+      onRefresh: load,
+      child: ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Keep a feeling.',
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
                 ),
+                const SizedBox(height: 12),
+                const Text('Personal playlists, saved on your phone.'),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: createPlaylist,
+                  icon: const Icon(Icons.add),
+                  label: const Text('New playlist'),
+                ),
+              ],
+            ),
           ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            ref.invalidate(favoriteTracksProvider);
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => FavoritesScreen(onLibrary: widget.onLibrary),
-              ),
-            );
-          },
-        ),
-        if (lists.isEmpty)
-          MusicEmptyState(
-            title: 'Make a playlist of your own',
-            message: 'Tap a song’s heart to save it in Favorites, or create a playlist for a mood.',
-            actionLabel: 'Create playlist',
-            onAction: createPlaylist,
-            icon: Icons.queue_music,
-          ),
-        ...lists.map(
-          (p) => ListTile(
+          ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 24,
               vertical: 8,
             ),
-            leading: const Icon(Icons.queue_music, size: 36),
-            title: Text(p.name),
-            subtitle: Text('${p.tracks.length} tracks'),
-            onTap: () async {
-              await Navigator.push(
+            leading: const Icon(Icons.favorite, size: 36),
+            title: const Text('Favorites'),
+            subtitle: Text(
+              ref
+                  .watch(favoriteTracksProvider)
+                  .when(
+                    data: (tracks) =>
+                        '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'} • Saved with the heart',
+                    loading: () => 'Loading favorites…',
+                    error: (_, _) => 'Could not load favorites. Pull to retry.',
+                  ),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ref.invalidate(favoriteTracksProvider);
+              Navigator.push(
                 context,
                 MaterialPageRoute<void>(
-                  builder: (_) =>
-                      PlaylistDetail(p, onLibrary: widget.onLibrary),
+                  builder: (_) => FavoritesScreen(onLibrary: widget.onLibrary),
                 ),
               );
-              await load();
             },
-            trailing: PopupMenuButton<String>(
-              tooltip: 'Playlist options',
-              onSelected: (action) async {
-                if (action == 'delete') {
-                  lists.removeWhere((item) => item.id == p.id);
-                } else {
-                  final name = await playlistName(context, initial: p.name);
-                  if (name == null) return;
-                  final i = lists.indexOf(p);
-                  lists[i] = Playlist(p.id, name, p.tracks);
-                }
-                await repo.save(lists);
+          ),
+          if (playlists.isLoading)
+            const Center(child: CircularProgressIndicator()),
+          if (playlists.hasError)
+            TextButton(onPressed: load, child: const Text('Retry playlists')),
+          if (playlists.hasValue && lists.isEmpty)
+            MusicEmptyState(
+              title: 'Make a playlist of your own',
+              message: 'Tap a song’s heart to save it in Favorites, or create a playlist for a mood.',
+              actionLabel: 'Create playlist',
+              onAction: createPlaylist,
+              icon: Icons.queue_music,
+            ),
+          ...lists.map(
+            (p) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 8,
+              ),
+              leading: const Icon(Icons.queue_music, size: 36),
+              title: Text(p.name),
+              subtitle: Text('${p.tracks.length} tracks'),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        PlaylistDetail(p, onLibrary: widget.onLibrary),
+                  ),
+                );
                 await load();
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'rename', child: Text('Rename')),
-                PopupMenuItem(value: 'delete', child: Text('Delete playlist')),
-              ],
+              trailing: PopupMenuButton<String>(
+                tooltip: 'Playlist options',
+                onSelected: (action) async {
+                  final lists = await repo.all();
+                  if (!context.mounted) return;
+                  if (action == 'delete') {
+                    lists.removeWhere((item) => item.id == p.id);
+                  } else {
+                    final name = await playlistName(context, initial: p.name);
+                    if (name == null) return;
+                    final i = lists.indexWhere((item) => item.id == p.id);
+                    if (i < 0) return;
+                    lists[i] = Playlist(p.id, name, lists[i].tracks);
+                  }
+                  await repo.save(lists);
+                  await load();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'rename', child: Text('Rename')),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete playlist'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class FavoritesScreen extends ConsumerWidget {
@@ -323,6 +332,7 @@ class _PlaylistDetailState extends ConsumerState<PlaylistDetail> {
     if (i >= 0) {
       lists[i] = Playlist(widget.playlist.id, widget.playlist.name, tracks);
       await repo.save(lists);
+      ref.invalidate(playlistsProvider);
     }
   }
 

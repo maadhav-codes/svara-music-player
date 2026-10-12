@@ -71,9 +71,11 @@ Downward swipes on the mini-player do nothing. You can also use its Play/Pause a
 
 ### Playlists
 
-Tap the **heart** in the full player, or choose **Favorite** from a song’s options, to save it automatically in **Playlists → Favorites**. Open Favorites to play all saved songs or choose one to start from. Tap the heart again, choose **Unfavorite**, or use **Remove from Favorites** to remove it. Favorites is a built-in collection and cannot be renamed or deleted. Local and online favorites survive app restarts; online entries save references and still need internet access.
+Tap the **heart** in the full player, or choose **Favorite** from a song’s options, to save it automatically in **Playlists → Favorites**. Open Favorites to play all saved songs or choose one to start from. Tap the heart again, choose **Unfavorite**, or use **Remove from Favorites** to remove it. Favorites is a pinned, built-in playlist and cannot be renamed or deleted. Its tracks are stored once with the other playlists; older favorites are migrated on upgrade. Local and online favorites survive app restarts; online entries save references and still need internet access.
 
 Tap **Add to playlist** beside the heart in the full player, or open a song’s options and choose **Add to Playlist**. Select an existing playlist or choose **New playlist**, enter a name, and save it; the current song is added automatically. Open the **Playlists** tab to play and manage collections, including reordering their tracks.
+
+Discovery searches, results, and tab scroll positions remain available when switching tabs.
 
 Saving an online track saves a reference, not an audio file. It still needs internet access and must remain available from its provider.
 
@@ -114,7 +116,7 @@ Svara stores its library index, favorites, playlists, settings, listening histor
 
 Online features contact third parties: YouTube and its stream/artwork hosts, and LRCLIB. Providers receive requests and normal network information; LRCLIB lookup includes song metadata. Local audio playback itself needs no network connection, but opening lyrics may trigger an online lookup if a local sidecar is unavailable.
 
-The app does not implement persistent downloads or a disk cache for online audio. Search responses, fetched artwork, and online lyrics use bounded session-memory caches. Saved YouTube selections retain identifying titles and uploader labels. Resolved stream URLs and request headers are not persisted.
+The app does not implement persistent downloads or a disk cache for online audio. Search responses, fetched artwork, and online lyrics use a shared bounded session-memory cache utility. YouTubeRepository owns its search cache; SQLite Store handles durable data only. Saved YouTube selections retain identifying titles and uploader labels. Resolved stream URLs and request headers are not persisted.
 
 Android permissions declared by the app:
 
@@ -190,7 +192,7 @@ assets/licenses/            # Bundled software license notices
 
 Riverpod wires repositories and app state. SQLite (`sqflite`) holds durable data; Dio handles lyrics requests. `just_audio` plays audio, `audio_service` exposes background/media controls, and `audio_session` handles audio focus.
 
-`Track.source` identifies local or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. `SourceResolver` resolves the selected reference at playback time, and the audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
+`Track.source` identifies local or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. `SvaraHandler` passes local URIs directly to the audio engine and resolves YouTube references at playback time, and the audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
 
 The YouTube plugin registers with both foreground and background Flutter engines. Native dependencies are pinned in `packages/svara_youtube/android/build.gradle`: NewPipeExtractor **v0.26.5**, OkHttp **4.12.0**, and NIO desugaring **2.1.5**. Native requests use bounded workers, cancellation, and deadlines; transient repository requests retry at most twice.
 

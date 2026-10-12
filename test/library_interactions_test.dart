@@ -68,9 +68,13 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
   Future<void> settle(WidgetTester tester) async {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 120)),
-    );
+    // Provider invalidation starts follow-up database reads on the next frame.
+    for (var i = 0; i < 3; i++) {
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+    }
     await tester.pumpAndSettle();
   }
 
@@ -182,7 +186,11 @@ void main() {
       await settle(tester);
       await settle(tester);
       expect(find.text('Your favorites start with a heart'), findsOneWidget);
-      expect(await tester.runAsync(() => store.read('favorites')), isEmpty);
+      expect(
+        (await tester.runAsync(() => PlaylistsRepository(store).favorites()))!
+            .tracks,
+        isEmpty,
+      );
       await tester.tap(find.byType(BackButton));
       await settle(tester);
       expect(find.text('0 tracks • Saved with the heart'), findsOneWidget);
@@ -258,7 +266,11 @@ void main() {
       expect(find.text('Unfavorite'), findsOneWidget);
       await tester.tap(find.text('Unfavorite'));
       await settle(tester);
-      expect(await tester.runAsync(() => store.read('favorites')), isEmpty);
+      expect(
+        (await tester.runAsync(() => PlaylistsRepository(store).favorites()))!
+            .tracks,
+        isEmpty,
+      );
       await choose('Play Next');
       expect(handler.tracks.map((t) => t.id), ['2', '1', '1']);
       expect(handler.activeIndex, 0);

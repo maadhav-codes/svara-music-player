@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
+import 'package:svara/core/media_source.dart';
 import 'package:svara/features/library/library_repository.dart';
 import 'package:svara/features/playlists/playlists_repository.dart';
 
@@ -14,7 +15,7 @@ Track song(String id, {bool online = false, int modified = 1}) => Track(
   uri: online
       ? 'https://example.org/$id'
       : 'content://media/external/audio/media/$id',
-  online: online,
+  source: online ? MediaSource.youtube : MediaSource.local,
   modified: modified,
 );
 
@@ -81,8 +82,7 @@ void main() {
         (await repo.all()).single.tracks.single.uri,
         contains('content://'),
       );
-      await store.write('favorites', ['1']);
-      expect(await store.read('favorites'), ['1']);
+      expect(await store.read('favorites'), isNull);
     },
   );
   test('reconciliation preserves unchanged tracks, updates renamed and removes deleted', () async {
@@ -127,14 +127,4 @@ void main() {
           .setMockMethodCallHandler(channel, null);
     },
   );
-  test('expired and oversized metadata is not served', () async {
-    await store.cache('old', {}, ttl: Duration.zero);
-    expect(await store.cached('old'), null);
-    await store.cache('large', 'x' * 500001);
-    expect(await store.cached('large'), null);
-    for (var i = 0; i < 25; i++) {
-      await store.cache('key$i', {'i': i});
-    }
-    expect(store.cacheEntries, lessThanOrEqualTo(20));
-  });
 }

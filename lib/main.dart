@@ -8,7 +8,6 @@ import 'core/providers.dart';
 import 'features/player/svara_handler.dart';
 import 'svara_app.dart';
 import 'features/discovery/youtube_repository.dart';
-import 'features/player/source_resolver.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,9 +15,8 @@ Future<void> main() async {
   final store = await Store.open();
   final youtube = YouTubeRepository(store);
   await youtube.loadSettings();
-  final resolver = SourceResolver(youtube: youtube);
   final handler = await AudioService.init<SvaraHandler>(
-    builder: () => SvaraHandler(store, resolve: resolver.resolve),
+    builder: () => SvaraHandler(store, resolveYouTube: youtube.resolve),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'app.svara.playback',
       androidNotificationChannelName: 'Svara playback',

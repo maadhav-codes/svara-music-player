@@ -8,6 +8,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/providers.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
+import 'package:svara/core/media_source.dart';
+import 'package:svara/core/resolved_track.dart';
 import 'package:svara/features/lyrics/lyrics.dart';
 import 'package:svara/features/lyrics/lyrics_repository.dart';
 import 'package:svara/features/lyrics/lyrics_screen.dart';
@@ -70,7 +72,12 @@ void main() {
       await tester.runAsync(() async {
         store = await Store.open(path: inMemoryDatabasePath);
         player = PositionPlayer();
-        handler = SvaraHandler(store, audioPlayer: player);
+        handler = SvaraHandler(
+          store,
+          audioPlayer: player,
+          resolveYouTube: (track, {cancel, alternative = false}) async =>
+              ResolvedTrack(track, ResolvedStream(uri: Uri.parse(track.uri))),
+        );
         await handler.setQueue(
           [first],
           position: const Duration(seconds: 12),

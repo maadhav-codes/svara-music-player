@@ -6,7 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/providers.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
-import 'package:svara/features/playlists/favorites_repository.dart';
+import 'package:svara/features/playlists/playlists_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,7 @@ void main() {
       expect(tracks.map((track) => track.id), [youtube.id, local.id]);
       expect(tracks.first.title, youtube.title);
       expect(tracks.first.uri, 'https://www.youtube.com/watch?v=aaaaaaaaaaa');
-      final saved = jsonEncode(await store.read('favoriteTracks'));
+      final saved = jsonEncode(await store.read('playlists'));
       expect(saved, isNot(contains('secret-signed-stream')));
       expect(saved, isNot(contains('private-stream')));
       expect(saved, isNot(contains('art.jpg')));
@@ -70,27 +70,38 @@ void main() {
   );
 
   test(
-    'legacy IDs recover local tracks across pages and online references',
+    'favorites reads only the pinned playlist without metadata scavenging',
     () async {
-      final locals = [
-        for (var i = 0; i < 205; i++)
-          Track(
-            id: 'local:$i',
-            title: 'Song $i',
-            artist: 'Artist',
-            uri: 'content://music/$i',
-          ),
-      ];
-      await store.reconcile(locals, locals.map((track) => track.id).toSet());
-      await store.write('favorites', ['local:99', youtube.id, 'local:missing']);
+      final repo = PlaylistsRepository(store);
+      await repo.toggleFavorite(local);
+      await store.write('favoriteTracks', [youtube.toSavedJson()]);
       await store.write('playback', {
         'tracks': [youtube.toSavedJson()],
       });
-      final tracks = await FavoritesRepository(store).tracks();
-      expect(tracks.map((track) => track.id), ['local:99', youtube.id]);
-      expect(tracks.first.title, 'Song 99');
-      expect(tracks.last.title, youtube.title);
-      expect(tracks.last.providerId, 'aaaaaaaaaaa');
+      await store.db.execute('DROP TABLE tracks');
+      expect((await repo.favorites()).tracks.map((t) => t.id), [local.id]);
+    },
+  );
+
+  test(
+    'user playlist saves preserve pinned favorites, even concurrently',
+    () async {
+      final repo = PlaylistsRepository(store);
+      await repo.toggleFavorite(local);
+      await Future.wait([
+        repo.save([
+          const Playlist('p', 'Evening', [youtube]),
+        ]),
+        repo.toggleFavorite(youtube),
+      ]);
+      expect((await repo.favorites()).tracks.map((t) => t.id).toSet(), {
+        local.id,
+        youtube.id,
+      });
+      expect((await repo.all()).single.name, 'Evening');
+      await repo.save([]);
+      expect((await repo.favorites()).tracks, hasLength(2));
+      expect(await repo.all(), isEmpty);
     },
   );
 
@@ -105,10 +116,13 @@ void main() {
         controller.toggle(local),
       ]);
       expect(container.read(favoritesProvider), {youtube.id});
-      expect(await store.read('favorites'), [youtube.id]);
-      final tracks = await FavoritesRepository(store).tracks();
+      expect(await store.read('favorites'), isNull);
+      final tracks = (await PlaylistsRepository(store).favorites()).tracks;
       expect(tracks.single.id, youtube.id);
-      expect((await store.read('favoriteTracks') as List).length, 1);
+      expect(
+        (await store.read('playlists') as List).single['tracks'],
+        hasLength(1),
+      );
     },
   );
   test(
@@ -116,7 +130,7 @@ void main() {
     () async {
       await store.db.execute('''
       CREATE TRIGGER fail_favorite_reference BEFORE INSERT ON settings
-      WHEN NEW.key = 'favoriteTracks'
+      WHEN NEW.key = 'playlists'
       BEGIN SELECT RAISE(ABORT, 'test write failure'); END
     ''');
       final controller = container.read(favoritesProvider.notifier);

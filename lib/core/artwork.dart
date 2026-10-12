@@ -6,11 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers.dart';
 import 'track.dart';
+import 'memory_cache.dart';
 
 class ArtworkCache {
-  static final _items = <String, (DateTime, Uint8List)>{};
+  static final _items = MemoryCache<String, Uint8List>(
+    capacity: 64,
+    ttl: const Duration(hours: 6),
+    maxWeight: 8 * 1024 * 1024,
+    weightOf: (bytes) => bytes.length,
+  );
   static final _pending = <String, Future<Uint8List?>>{};
-  static int _bytes = 0;
   static final _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 5),
@@ -20,14 +25,8 @@ class ArtworkCache {
   static Future<Uint8List?> load(Track track, WidgetRef ref) async {
     final key = track.online ? track.artwork : '${track.uri}:${track.modified}';
     if (key == null) return null;
-    final cached = _items.remove(key);
-    if (cached != null) {
-      if (DateTime.now().difference(cached.$1) < const Duration(hours: 6)) {
-        _items[key] = cached;
-        return cached.$2;
-      }
-      _bytes -= cached.$2.length;
-    }
+    final cached = _items.get(key);
+    if (cached != null) return cached;
     if (_pending.containsKey(key)) return _pending[key];
     final repository = ref.read(libraryRepositoryProvider);
     final task = () async {
@@ -48,13 +47,7 @@ class ArtworkCache {
           bytes = await repository.artwork(track.uri);
         }
         if (bytes == null || bytes.length > 2 * 1024 * 1024) return null;
-        while (_items.isNotEmpty &&
-            (_bytes + bytes.length > 8 * 1024 * 1024 || _items.length >= 64)) {
-          final first = _items.remove(_items.keys.first)!;
-          _bytes -= first.$2.length;
-        }
-        _items[key] = (DateTime.now(), bytes);
-        _bytes += bytes.length;
+        _items.put(key, bytes);
         return bytes;
       } catch (_) {
         return null;

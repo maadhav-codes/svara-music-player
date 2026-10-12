@@ -1,12 +1,14 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/media_source.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
 import 'package:svara/features/discovery/youtube_repository.dart';
-import 'package:svara/features/player/source_resolver.dart';
+import 'package:svara/features/player/svara_handler.dart';
+
+import 'player_test.dart' show MemoryPlayer;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +30,11 @@ void main() {
         'url': 'https://media.example/audio',
       },
     );
-    final resolver = SourceResolver(
-      youtube: YouTubeRepository(store, channel: channel),
+    final player = MemoryPlayer();
+    final handler = SvaraHandler(
+      store,
+      audioPlayer: player,
+      resolveYouTube: YouTubeRepository(store, channel: channel).resolve,
     );
     try {
       const local = Track(
@@ -38,20 +43,22 @@ void main() {
         artist: 'A',
         uri: 'content://media/external/audio/media/42',
       );
-      expect((await resolver.resolve(local)).stream.uri.toString(), local.uri);
+      await handler.setQueue([local], start: false);
+      expect((player.lastSource! as UriAudioSource).uri.toString(), local.uri);
       const yt = Track(
         id: 'youtube:aaaaaaaaaaa',
         title: '',
         artist: '',
         uri: '',
       );
-      expect((await resolver.resolve(yt)).track.source, MediaSource.youtube);
-      final cancelled = CancelToken()..cancel();
-      await expectLater(
-        resolver.resolve(local, cancel: cancelled),
-        throwsA(isA<DioException>()),
+      await handler.setQueue([yt], start: false);
+      expect(handler.current!.source, MediaSource.youtube);
+      expect(
+        (player.lastSource! as UriAudioSource).uri.toString(),
+        'https://media.example/audio',
       );
     } finally {
+      await handler.dispose();
       messenger.setMockMethodCallHandler(channel, null);
       await store.db.close();
     }

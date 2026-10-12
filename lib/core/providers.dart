@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'store.dart';
 import 'track.dart';
-import '../features/playlists/favorites_repository.dart';
+import '../features/playlists/playlists_repository.dart';
 import '../features/library/library_repository.dart';
 import '../features/discovery/youtube_repository.dart';
 import '../features/player/svara_handler.dart';
@@ -55,15 +55,24 @@ class FavoritesController extends Notifier<Set<String>> {
   @override
   Set<String> build() => {};
   Future<void> load() => _serialize(() async {
-    state = await FavoritesRepository(ref.read(storeProvider)).ids();
+    state = (await PlaylistsRepository(
+      ref.read(storeProvider),
+    ).favorites()).tracks.map((t) => t.id).toSet();
   });
 
   Future<void> toggle(Track track) => _serialize(() async {
-    state = await FavoritesRepository(ref.read(storeProvider)).toggle(track);
+    state = await PlaylistsRepository(ref.read(storeProvider))
+        .toggleFavorite(track);
   });
 }
 
 final favoriteTracksProvider = FutureProvider<List<Track>>((ref) {
   ref.watch(favoritesProvider);
-  return FavoritesRepository(ref.watch(storeProvider)).tracks();
+  return PlaylistsRepository(ref.watch(storeProvider))
+      .favorites()
+      .then((playlist) => playlist.tracks);
 });
+
+final playlistsProvider = FutureProvider<List<Playlist>>(
+  (ref) => PlaylistsRepository(ref.watch(storeProvider)).all(),
+);

@@ -8,7 +8,7 @@ import 'package:svara/core/store.dart';
 import 'package:svara/core/media_source.dart';
 import 'package:svara/core/track.dart';
 import 'package:svara/features/player/player_screen.dart';
-import 'package:svara/features/player/source_resolver.dart';
+import 'package:svara/core/resolved_track.dart';
 import 'package:svara/features/player/svara_handler.dart';
 
 import 'player_test.dart' show MemoryPlayer;
@@ -33,7 +33,7 @@ void main() {
         handler = SvaraHandler(
           store,
           audioPlayer: player,
-          resolve: (track, {cancel, alternative = false}) {
+          resolveYouTube: (track, {cancel, alternative = false}) {
             resolving.add(track);
             return pending?.future ??
                 Future.value(
@@ -50,12 +50,14 @@ void main() {
             title: 'First',
             artist: 'Artist',
             uri: 'content://music/1',
+            source: MediaSource.youtube,
           ),
           const Track(
             id: '2',
             title: 'Second',
             artist: 'Artist',
             uri: 'content://music/2',
+            source: MediaSource.youtube,
           ),
         ]);
       });

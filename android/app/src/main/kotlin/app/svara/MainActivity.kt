@@ -203,7 +203,7 @@ class MainActivity : AudioServiceActivity() {
                     changed.add(mapOf("id" to id, "title" to string(MediaStore.Audio.Media.TITLE),
                         "artist" to string(MediaStore.Audio.Media.ARTIST), "album" to string(MediaStore.Audio.Media.ALBUM),
                         "durationMs" to number(MediaStore.Audio.Media.DURATION), "folder" to folder,
-                        "uri" to uri, "modified" to modified, "online" to false))
+                        "uri" to uri, "modified" to modified, "source" to "local"))
                 }
             }
         }
