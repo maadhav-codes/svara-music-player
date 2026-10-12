@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
-import '../../core/media_source.dart';
 import '../../core/track.dart';
 import '../../core/widgets/music_empty_state.dart';
 import '../library/library_screen.dart';
@@ -27,7 +26,6 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   String? error;
   bool loading = false, more = true;
   int generation = 0;
-  MediaSource source = MediaSource.audius;
   String? continuation;
   @override
   void initState() {
@@ -59,39 +57,21 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       error = null;
     });
     try {
-      final List<Track> page;
-      String? nextContinuation;
-      bool hasMore;
       final preset = query.isEmpty ? category : null;
-      if (source == MediaSource.youtube) {
-        final data = await ref
-            .read(youtubeProvider)
-            .search(
-              query.isNotEmpty ? query : preset?.youtubeQuery ?? '',
-              continuation: continuation,
-              cancel: token,
-            );
-        page = data.tracks;
-        nextContinuation = data.continuation;
-        hasMore = data.continuation != null;
-      } else {
-        page = await ref
-            .read(audiusProvider)
-            .tracks(
-              query: query.isNotEmpty ? query : preset?.audiusQuery ?? '',
-              genre: preset?.genre,
-              time: preset?.time,
-              offset: tracks.length,
-              cancel: token,
-            );
-        hasMore = page.length == 30;
-      }
+      final data = await ref
+          .read(youtubeProvider)
+          .search(
+            query.isNotEmpty ? query : preset?.youtubeQuery ?? '',
+            continuation: continuation,
+            cancel: token,
+          );
+      final page = data.tracks;
       if (mounted && generation == version) {
         setState(() {
           final ids = tracks.map((t) => t.id).toSet();
           tracks.addAll(page.where((t) => ids.add(t.id)));
-          continuation = nextContinuation;
-          more = hasMore;
+          continuation = data.continuation;
+          more = data.continuation != null;
         });
       }
     } catch (e) {
@@ -106,73 +86,30 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   }
 
   Future<void> artist(Track t) async {
-    if (t.source == MediaSource.youtube) {
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: (_) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  t.artist,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'YouTube uploader • Channel attribution may differ from the recording artist. This may be a cover, remix, or live performance.',
-                ),
-                TextButton(
-                  onPressed: () => openSource(t),
-                  child: const Text('Open video in YouTube'),
-                ),
-              ],
-            ),
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t.artist, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 12),
+              const Text(
+                'YouTube uploader • Channel attribution may differ from the recording artist. This may be a cover, remix, or live performance.',
+              ),
+              TextButton(
+                onPressed: () => openSource(t),
+                child: const Text('Open video in YouTube'),
+              ),
+            ],
           ),
         ),
-      );
-      return;
-    }
-    if (t.artistId == null) return;
-    try {
-      final data = await ref.read(audiusProvider).artist(t.artistId!);
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        builder: (_) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data['name']?.toString() ?? t.artist,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                Text('@${data['handle'] ?? ''} • Audius'),
-                const SizedBox(height: 16),
-                Text(
-                  data['bio']?.toString() ?? 'No artist biography available.',
-                ),
-                const SizedBox(height: 16),
-                Text('${data['follower_count'] ?? 0} followers'),
-              ],
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    }
+      ),
+    );
   }
 
   Future<void> openSource(Track track) async {
@@ -209,48 +146,20 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  source == MediaSource.audius
-                      ? 'Powered by Audius • Independent music, streamed online. Catalog availability varies.'
-                      : 'YouTube • Experimental source. Availability varies; extraction may stop working. Uploader names may differ from artists.',
-                ),
-                const SizedBox(height: 16),
-                SegmentedButton<MediaSource>(
-                  segments: const [
-                    ButtonSegment(
-                      value: MediaSource.audius,
-                      label: Text('Audius'),
-                    ),
-                    ButtonSegment(
-                      value: MediaSource.youtube,
-                      label: Text('YouTube'),
-                    ),
-                  ],
-                  selected: {source},
-                  onSelectionChanged: (value) {
-                    debounce?.cancel();
-                    source = value.single;
-                    if (query.isEmpty &&
-                        category == null &&
-                        source == MediaSource.audius) {
-                      category = DiscoveryCategory.trendingToday;
-                    }
-                    unawaited(load(reset: true));
-                  },
-                ),
+                const Text('Search and stream music from YouTube.'),
                 const SizedBox(height: 24),
                 TextField(
                   controller: searchController,
                   decoration: InputDecoration(
                     prefixIcon: Icon(Icons.search),
-                    hintText: 'Search ${source.label}',
+                    hintText: 'Search YouTube',
                   ),
                   onChanged: (value) {
                     debounce?.cancel();
                     token?.cancel();
                     generation++;
                     query = value.trim();
-                    category = query.isEmpty && source == MediaSource.audius
+                    category = query.isEmpty
                         ? DiscoveryCategory.trendingToday
                         : null;
                     setState(() {
@@ -287,9 +196,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                                   debounce?.cancel();
                                   category = selected
                                       ? choice
-                                      : source == MediaSource.audius
-                                      ? DiscoveryCategory.trendingToday
-                                      : null;
+                                      : DiscoveryCategory.trendingToday;
                                   unawaited(load(reset: true));
                                 },
                               ),
@@ -303,17 +210,13 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 Text(
                   query.isEmpty && category != null
                       ? category!.label
-                      : query.isEmpty && source == MediaSource.audius
-                      ? 'Trending this week'
                       : 'Search results',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 if (query.isEmpty && category != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    source == MediaSource.audius
-                        ? category!.audiusDescription
-                        : 'Suggested music search on YouTube',
+                    'Suggested music search on YouTube',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -327,9 +230,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
           final t = tracks[i - 1];
           return SongTile(
             t,
-            onViewArtist: t.source == MediaSource.youtube || t.artistId != null
-                ? () => artist(t)
-                : null,
+            onViewArtist: () => artist(t),
             onPlay: () {
               final playable = tracks.where((s) => s.streamable).toList();
               unawaited(

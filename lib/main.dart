@@ -7,7 +7,6 @@ import 'core/licenses.dart';
 import 'core/providers.dart';
 import 'features/player/svara_handler.dart';
 import 'svara_app.dart';
-import 'features/discovery/audius_repository.dart';
 import 'features/discovery/youtube_repository.dart';
 import 'features/player/source_resolver.dart';
 
@@ -15,10 +14,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerNativeLicenses();
   final store = await Store.open();
-  final audius = AudiusRepository(store);
   final youtube = YouTubeRepository(store);
   await youtube.loadSettings();
-  final resolver = SourceResolver(audius: audius, youtube: youtube);
+  final resolver = SourceResolver(youtube: youtube);
   final handler = await AudioService.init<SvaraHandler>(
     builder: () => SvaraHandler(store, resolve: resolver.resolve),
     config: const AudioServiceConfig(
@@ -34,7 +32,6 @@ Future<void> main() async {
       overrides: [
         storeProvider.overrideWithValue(store),
         handlerProvider.overrideWithValue(handler),
-        audiusProvider.overrideWithValue(audius),
         youtubeProvider.overrideWithValue(youtube),
       ],
       child: const SvaraApp(),

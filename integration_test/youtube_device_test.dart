@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
-import 'package:svara/features/discovery/audius_repository.dart';
 import 'package:svara/features/discovery/youtube_repository.dart';
 import 'package:svara/features/player/source_resolver.dart';
 import 'package:svara/features/player/svara_handler.dart';
@@ -32,10 +31,7 @@ void main() {
       );
       final store = await Store.open(path: ':memory:');
       final youtube = YouTubeRepository(store);
-      final resolver = SourceResolver(
-        audius: AudiusRepository(store),
-        youtube: youtube,
-      );
+      final resolver = SourceResolver(youtube: youtube);
       final handler = await AudioService.init<SvaraHandler>(
         builder: () => SvaraHandler(store, resolve: resolver.resolve),
         config: const AudioServiceConfig(

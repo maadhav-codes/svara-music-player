@@ -1,5 +1,5 @@
 name: svara
-description: A private offline music library with Audius and experimental YouTube discovery.
+description: An offline music library with YouTube discovery and streaming.
 publish_to: none
 version: 2.2.0+2200
 environment:

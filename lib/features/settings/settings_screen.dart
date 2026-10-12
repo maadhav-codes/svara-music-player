@@ -15,7 +15,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentQuality = ref.watch(youtubeProvider).quality;
-    final isYoutubeEnabled = ref.watch(youtubeProvider).enabled;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -68,48 +67,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
-          SwitchListTile.adaptive(
-            secondary: const Icon(Icons.travel_explore_outlined),
-            title: const Text('YouTube discovery'),
-            subtitle: const Text(
-              'Experimental source. Stream audio and music search.',
-            ),
-            value: isYoutubeEnabled,
-            onChanged: (enabled) async {
-              await ref.read(youtubeProvider).configure(enabled: enabled);
-              if (!enabled &&
-                  ref.read(handlerProvider).current?.source ==
-                      MediaSource.youtube) {
-                await ref.read(handlerProvider).stop();
-              }
-              if (mounted) setState(() {});
-            },
-          ),
-          if (isYoutubeEnabled)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: DropdownButtonFormField<StreamQuality>(
-                initialValue: currentQuality,
-                decoration: const InputDecoration(
-                  labelText: 'YouTube audio quality',
-                  prefixIcon: Icon(Icons.high_quality_outlined),
-                ),
-                items: StreamQuality.values
-                    .map(
-                      (quality) => DropdownMenuItem(
-                        value: quality,
-                        child: Text(quality.label),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (quality) async {
-                  if (quality != null) {
-                    await ref.read(youtubeProvider).configure(quality: quality);
-                    if (mounted) setState(() {});
-                  }
-                },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: DropdownButtonFormField<StreamQuality>(
+              initialValue: currentQuality,
+              decoration: const InputDecoration(
+                labelText: 'YouTube audio quality',
+                prefixIcon: Icon(Icons.high_quality_outlined),
               ),
+              items: StreamQuality.values
+                  .map(
+                    (quality) => DropdownMenuItem(
+                      value: quality,
+                      child: Text(quality.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (quality) async {
+                if (quality != null) {
+                  await ref.read(youtubeProvider).configure(quality: quality);
+                  if (mounted) setState(() {});
+                }
+              },
             ),
+          ),
           const Divider(indent: 24, endIndent: 24),
 
           // --- Privacy & Storage ---

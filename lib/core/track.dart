@@ -1,4 +1,4 @@
-// Preserve the public constructor used by legacy local/Audius repositories.
+// Preserve the public constructor used by local and YouTube repositories.
 // ignore_for_file: prefer_initializing_formals
 import 'media_source.dart';
 
@@ -26,16 +26,13 @@ class Track {
   final MediaSource? _source;
   MediaSource get source =>
       _source ??
-      (id.startsWith('youtube:')
+      (id.startsWith('youtube:') || _online
           ? MediaSource.youtube
-          : _online || id.startsWith('audius:')
-          ? MediaSource.audius
           : MediaSource.local);
   bool get online => source != MediaSource.local;
   String get providerId => id.substring(id.indexOf(':') + 1);
   String get sourceUrl => switch (source) {
     MediaSource.youtube => 'https://www.youtube.com/watch?v=$providerId',
-    MediaSource.audius => 'https://audius.co',
     MediaSource.local => uri,
   };
   Map<String, Object?> toJson() => {
@@ -54,15 +51,12 @@ class Track {
     'modified': modified,
   };
   // Online selections persist identifiers, never signed URLs or API credentials.
-  // Audius metadata must remain session-only; use placeholders until resolved.
   Map<String, Object?> toSavedJson() => online
       ? {
           'id': id,
-          'title': source == MediaSource.youtube
-              ? title
-              : '${source.label} track',
-          'artist': source == MediaSource.youtube ? artist : source.label,
-          if (source == MediaSource.youtube) 'durationMs': durationMs,
+          'title': title,
+          'artist': artist,
+          'durationMs': durationMs,
           'uri': sourceUrl,
           'online': true,
           'source': source.name,

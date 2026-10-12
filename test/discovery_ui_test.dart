@@ -1,6 +1,3 @@
-import 'dart:convert';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,18 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/providers.dart';
 import 'package:svara/core/store.dart';
-import 'package:svara/features/discovery/audius_repository.dart';
 import 'package:svara/features/discovery/discovery_screen.dart';
 import 'package:svara/features/discovery/youtube_repository.dart';
-
-import 'svara_test.dart' show FakeAdapter;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfiNoIsolate;
   testWidgets(
-    'source picker, debounce, pagination, attribution and disabled recovery',
+    'YouTube discovery, debounce, pagination and uploader attribution',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -29,16 +23,6 @@ void main() {
       await tester.runAsync(() async {
         store = await Store.open(path: inMemoryDatabasePath);
       });
-      final dio = Dio(BaseOptions(baseUrl: 'https://example.org'));
-      dio.httpClientAdapter = FakeAdapter(
-        (_, _) => ResponseBody.fromString(
-          jsonEncode({'data': []}),
-          200,
-          headers: {
-            'content-type': ['application/json'],
-          },
-        ),
-      );
       const channel = MethodChannel('test.discovery/youtube');
       final youtube = YouTubeRepository(store, channel: channel);
       var calls = 0;
@@ -71,31 +55,13 @@ void main() {
           ProviderScope(
             overrides: [
               storeProvider.overrideWithValue(store),
-              audiusProvider.overrideWithValue(
-                AudiusRepository(store, client: dio),
-              ),
               youtubeProvider.overrideWithValue(youtube),
             ],
             child: const MaterialApp(home: Scaffold(body: DiscoveryScreen())),
           ),
         );
         await settle();
-        await tester.enterText(find.byType(TextField), 'missing song');
-        await tester.pump(const Duration(milliseconds: 400));
-        await settle();
-        await tester.ensureVisible(find.text('Explore trending music'));
-        await tester.pumpAndSettle();
-        expect(find.text('No songs found'), findsOneWidget);
-        await tester.tap(find.text('Explore trending music'));
-        await settle();
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          isEmpty,
-        );
-        await tester.ensureVisible(find.text('YouTube'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('YouTube'));
-        await settle();
+        expect(find.byType(SegmentedButton), findsNothing);
         expect(calls, 1);
         await tester.enterText(find.byType(TextField), 'music');
         await tester.pump(const Duration(milliseconds: 200));
@@ -119,13 +85,6 @@ void main() {
         expect(tester.takeException(), null);
         Navigator.of(tester.element(find.text('Open video in YouTube'))).pop();
         await tester.pumpAndSettle();
-        await tester.runAsync(() => youtube.configure(enabled: false));
-        await tester.ensureVisible(find.byType(TextField));
-        await tester.enterText(find.byType(TextField), 'disabled');
-        await tester.pump(const Duration(milliseconds: 400));
-        await settle();
-        expect(find.text('YouTube is disabled in Settings.'), findsOneWidget);
-        expect(calls, 3);
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         await tester.pumpAndSettle();
         expect(tester.takeException(), null);
@@ -133,7 +92,6 @@ void main() {
       } finally {
         await tester.pumpWidget(const SizedBox());
         messenger.setMockMethodCallHandler(channel, null);
-        dio.close();
         await tester.runAsync(() => store.db.close());
       }
     },

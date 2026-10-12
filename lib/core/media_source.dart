@@ -1,6 +1,5 @@
 enum MediaSource {
   local('Phone storage'),
-  audius('Audius'),
   youtube('YouTube');
 
   const MediaSource(this.label);

@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 
 import '../../core/media_source.dart';
 import '../../core/track.dart';
-import '../discovery/audius_repository.dart';
 import '../discovery/youtube_repository.dart';
 
 class ResolvedTrack {
@@ -18,8 +17,7 @@ typedef ResolveTrack = Future<ResolvedTrack> Function(
 });
 
 class SourceResolver {
-  SourceResolver({required this.audius, required this.youtube});
-  final AudiusRepository audius;
+  SourceResolver({required this.youtube});
   final YouTubeRepository youtube;
   Future<ResolvedTrack> resolve(
     Track reference, {
@@ -33,15 +31,6 @@ class SourceResolver {
           reference,
           ResolvedStream(uri: Uri.parse(reference.uri)),
         );
-      case MediaSource.audius:
-        final track = await audius.track(reference, cancel: cancel);
-        if (!track.streamable) {
-          throw const SourceException(
-            'restricted',
-            'This Audius track is not publicly streamable.',
-          );
-        }
-        return ResolvedTrack(track, ResolvedStream(uri: Uri.parse(track.uri)));
       case MediaSource.youtube:
         return youtube.resolve(
           reference,

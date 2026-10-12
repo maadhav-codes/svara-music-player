@@ -27,12 +27,6 @@ void main() {
     uri: 'https://googlevideo.com/secret-signed-stream',
     artwork: 'https://example.org/art.jpg',
   );
-  const audius = Track(
-    id: 'audius:abc',
-    title: 'Audius original title',
-    artist: 'Audius artist',
-    uri: 'https://example.org/private-stream',
-  );
 
   setUp(() async {
     store = await Store.open(path: inMemoryDatabasePath);
@@ -51,36 +45,26 @@ void main() {
       final controller = container.read(favoritesProvider.notifier);
       await controller.toggle(local);
       await controller.toggle(youtube);
-      await controller.toggle(audius);
       container.dispose();
       container = ProviderContainer(
         overrides: [storeProvider.overrideWithValue(store)],
       );
       await container.read(favoritesProvider.notifier).load();
-      expect(container.read(favoritesProvider), {
-        local.id,
-        youtube.id,
-        audius.id,
-      });
+      expect(container.read(favoritesProvider), {local.id, youtube.id});
       final tracks = await container.read(favoriteTracksProvider.future);
-      expect(tracks.map((track) => track.id), [
-        audius.id,
-        youtube.id,
-        local.id,
-      ]);
-      expect(tracks[1].title, youtube.title);
-      expect(tracks[1].uri, 'https://www.youtube.com/watch?v=aaaaaaaaaaa');
-      expect(tracks.first.title, 'Audius track');
+      expect(tracks.map((track) => track.id), [youtube.id, local.id]);
+      expect(tracks.first.title, youtube.title);
+      expect(tracks.first.uri, 'https://www.youtube.com/watch?v=aaaaaaaaaaa');
       final saved = jsonEncode(await store.read('favoriteTracks'));
       expect(saved, isNot(contains('secret-signed-stream')));
       expect(saved, isNot(contains('private-stream')));
       expect(saved, isNot(contains('art.jpg')));
       await container.read(favoritesProvider.notifier).toggle(youtube);
-      expect(container.read(favoritesProvider), {local.id, audius.id});
+      expect(container.read(favoritesProvider), {local.id});
       expect(
         (await container.read(favoriteTracksProvider.future))
             .map((track) => track.id),
-        [audius.id, local.id],
+        [local.id],
       );
     },
   );
@@ -98,24 +82,15 @@ void main() {
           ),
       ];
       await store.reconcile(locals, locals.map((track) => track.id).toSet());
-      await store.write('favorites', [
-        'local:99',
-        youtube.id,
-        audius.id,
-        'local:missing',
-      ]);
+      await store.write('favorites', ['local:99', youtube.id, 'local:missing']);
       await store.write('playback', {
         'tracks': [youtube.toSavedJson()],
       });
       final tracks = await FavoritesRepository(store).tracks();
-      expect(tracks.map((track) => track.id), [
-        'local:99',
-        youtube.id,
-        audius.id,
-      ]);
+      expect(tracks.map((track) => track.id), ['local:99', youtube.id]);
       expect(tracks.first.title, 'Song 99');
-      expect(tracks[1].title, youtube.title);
-      expect(tracks.last.providerId, 'abc');
+      expect(tracks.last.title, youtube.title);
+      expect(tracks.last.providerId, 'aaaaaaaaaaa');
     },
   );
 

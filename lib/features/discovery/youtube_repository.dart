@@ -32,23 +32,17 @@ class YouTubeRepository {
   final Future<void> Function(Duration) delay;
   final DateTime Function() now;
   final Random random;
-  bool enabled = true;
   StreamQuality quality = StreamQuality.standard;
   int _requestId = 0;
 
   Future<void> loadSettings() async {
-    enabled = await store.read('youtubeEnabled') != false;
     final saved = await store.read('streamQuality');
     quality =
         StreamQuality.values.where((q) => q.name == saved).firstOrNull ??
         StreamQuality.standard;
   }
 
-  Future<void> configure({bool? enabled, StreamQuality? quality}) async {
-    if (enabled != null) {
-      this.enabled = enabled;
-      await store.write('youtubeEnabled', enabled);
-    }
+  Future<void> configure({StreamQuality? quality}) async {
     if (quality != null) {
       this.quality = quality;
       await store.write('streamQuality', quality.name);
@@ -60,12 +54,6 @@ class YouTubeRepository {
     Map<String, Object?> args, {
     CancelToken? cancel,
   }) async {
-    if (!enabled) {
-      throw const SourceException(
-        'disabled',
-        'YouTube is disabled in Settings. Phone music and Audius are still available.',
-      );
-    }
     for (var attempt = 0; attempt < 3; attempt++) {
       if (cancel?.isCancelled ?? false) throw cancel!.cancelError!;
       final requestId = '${++_requestId}';
@@ -187,12 +175,6 @@ class YouTubeRepository {
     String? continuation,
     CancelToken? cancel,
   }) async {
-    if (!enabled) {
-      throw const SourceException(
-        'disabled',
-        'YouTube is disabled in Settings.',
-      );
-    }
     query = query.trim();
     if (query.isEmpty) return const YouTubePage([], null);
     if (query.length > 300) {

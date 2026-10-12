@@ -195,7 +195,6 @@ void main() {
       await tester.tap(find.byType(MiniPlayer));
       await tester.pumpAndSettle();
       expect(find.text('STREAMING FROM YOUTUBE'), findsOneWidget);
-      expect(find.text('STREAMING FROM AUDIUS'), findsNothing);
       expect(find.text('Open video in YouTube'), findsOneWidget);
       expect(find.text('0:42'), findsOneWidget);
       expect(tester.takeException(), null);

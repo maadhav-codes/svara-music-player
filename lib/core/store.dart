@@ -11,7 +11,10 @@ class Store {
   static Future<Store> open({String? path}) async {
     final db = await openDatabase(
       path ?? p.join(await getDatabasesPath(), 'svara.db'),
-      version: 1,
+      version: 2,
+      onUpgrade: (db, oldVersion, _) async {
+        if (oldVersion < 2) await _removeAudius(db);
+      },
       onCreate: (db, _) async {
         await db.execute(
           'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
@@ -25,6 +28,63 @@ class Store {
       },
     );
     return Store(db);
+  }
+
+  // Version 2 retires Audius without changing local/YouTube references or lists.
+  static Future<void> _removeAudius(DatabaseExecutor db) async {
+    bool retired(dynamic value) => value is Map
+        ? value['source'] == 'audius' || retired(value['id'])
+        : value is String && value.startsWith('audius:');
+    List<dynamic> keep(List<dynamic> values) =>
+        values.where((value) => !retired(value)).toList();
+    for (final row in await db.query('settings')) {
+      final key = row['key'] as String;
+      dynamic value = jsonDecode(row['value'] as String);
+      switch (key) {
+        case 'favorites':
+        case 'favoriteTracks':
+          value = keep(value as List);
+        case 'playlists':
+          value = [
+            for (final playlist in value as List)
+              {...playlist as Map, 'tracks': keep(playlist['tracks'] as List)},
+          ];
+        case 'playback':
+          final original = value['tracks'] as List;
+          final selected = (value['index'] as int? ?? 0).clamp(
+            0,
+            original.isEmpty ? 0 : original.length - 1,
+          );
+          final tracks = keep(original);
+          final index = keep(original.take(selected).toList()).length
+              .clamp(0, tracks.isEmpty ? 0 : tracks.length - 1);
+          value = {
+            ...value as Map,
+            'tracks': tracks,
+            'index': index,
+            if (original.isEmpty || retired(original[selected])) 'position': 0,
+          };
+        default:
+          continue;
+      }
+      await db.update(
+        'settings',
+        {'value': jsonEncode(value)},
+        where: 'key = ?',
+        whereArgs: [key],
+      );
+    }
+    await db.delete(
+      'settings',
+      where: 'key = ?',
+      whereArgs: ['youtubeEnabled'],
+    );
+    await db.delete('history', where: 'id LIKE ?', whereArgs: ['audius:%']);
+    for (final row in await db.query('tracks')) {
+      if (retired(row['id']) || retired(jsonDecode(row['data'] as String))) {
+        await db.delete('tracks', where: 'id = ?', whereArgs: [row['id']]);
+      }
+    }
   }
 
   Future<dynamic> read(String key) async {

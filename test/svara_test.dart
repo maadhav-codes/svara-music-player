@@ -1,12 +1,9 @@
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/core/track.dart';
-import 'package:svara/features/discovery/audius_repository.dart';
 import 'package:svara/features/library/library_repository.dart';
 import 'package:svara/features/playlists/playlists_repository.dart';
 
@@ -130,81 +127,6 @@ void main() {
           .setMockMethodCallHandler(channel, null);
     },
   );
-  test('Audius maps public and gated tracks and caches metadata', () async {
-    final dio = Dio(BaseOptions(baseUrl: 'https://example.org'));
-    final adapter = FakeAdapter((options, _) {
-      expect(options.path, '/v1/tracks/search');
-      expect(options.queryParameters['offset'], 30);
-      return ResponseBody.fromString(
-        jsonEncode({
-          'data': [
-            {
-              'id': 'one',
-              'title': 'Public',
-              'duration': 90,
-              'user': {'id': 'artist', 'name': 'Creator'},
-            },
-            {
-              'id': 'two',
-              'title': 'Gated',
-              'is_stream_gated': true,
-              'user': {'name': 'Creator'},
-            },
-          ],
-        }),
-        200,
-        headers: {
-          Headers.contentTypeHeader: ['application/json'],
-        },
-      );
-    });
-    dio.httpClientAdapter = adapter;
-    final repo = AudiusRepository(store, client: dio);
-    final tracks = await repo.tracks(query: 'music', offset: 30);
-    expect(tracks.first.streamable, true);
-    expect(tracks.last.streamable, false);
-    expect(tracks.first.durationMs, 90000);
-    expect(tracks.first.uri, contains('/stream'));
-    await repo.tracks(query: 'music', offset: 30);
-    expect(adapter.calls, 1);
-  });
-  test(
-    'rate limits retry twice with bounded backoff then return a useful error',
-    () async {
-      final dio = Dio(BaseOptions(baseUrl: 'https://example.org'));
-      final adapter = FakeAdapter(
-        (_, _) => ResponseBody.fromString(
-          '{}',
-          429,
-          headers: {
-            'retry-after': ['100'],
-          },
-        ),
-      );
-      dio.httpClientAdapter = adapter;
-      final waits = <Duration>[];
-      final repo = AudiusRepository(
-        store,
-        client: dio,
-        delay: (d) async {
-          waits.add(d);
-        },
-      );
-      await expectLater(repo.tracks(), throwsA(isA<DiscoveryException>()));
-      expect(adapter.calls, 3);
-      expect(waits, [const Duration(seconds: 4), const Duration(seconds: 4)]);
-    },
-  );
-  test('restricted and missing responses are never retried', () async {
-    final dio = Dio(BaseOptions(baseUrl: 'https://example.org'));
-    final adapter = FakeAdapter((_, _) => ResponseBody.fromString('{}', 403));
-    dio.httpClientAdapter = adapter;
-    await expectLater(
-      AudiusRepository(store, client: dio).tracks(),
-      throwsA(isA<DiscoveryException>()),
-    );
-    expect(adapter.calls, 1);
-  });
   test('expired and oversized metadata is not served', () async {
     await store.cache('old', {}, ttl: Duration.zero);
     expect(await store.cached('old'), null);

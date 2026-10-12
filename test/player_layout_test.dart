@@ -48,11 +48,7 @@ void main() {
         await store.db.close();
       });
       for (final brightness in Brightness.values) {
-        for (final source in [
-          MediaSource.local,
-          MediaSource.audius,
-          MediaSource.youtube,
-        ]) {
+        for (final source in [MediaSource.local, MediaSource.youtube]) {
           // Metadata can change sources without asking the test audio player to resolve a network stream.
           handler.tracks[0] = Track(
             id: 'local:1',

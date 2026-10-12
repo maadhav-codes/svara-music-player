@@ -5,7 +5,6 @@ import 'store.dart';
 import 'track.dart';
 import '../features/playlists/favorites_repository.dart';
 import '../features/library/library_repository.dart';
-import '../features/discovery/audius_repository.dart';
 import '../features/discovery/youtube_repository.dart';
 import '../features/player/svara_handler.dart';
 
@@ -15,9 +14,6 @@ final handlerProvider = Provider<SvaraHandler>(
 );
 final libraryRepositoryProvider = Provider(
   (ref) => LibraryRepository(ref.watch(storeProvider)),
-);
-final audiusProvider = Provider(
-  (ref) => AudiusRepository(ref.watch(storeProvider)),
 );
 final youtubeProvider = Provider(
   (ref) => YouTubeRepository(ref.watch(storeProvider)),

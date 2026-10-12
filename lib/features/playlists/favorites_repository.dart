@@ -64,11 +64,11 @@ class FavoritesRepository {
     // Online IDs remain resolvable even if their old display metadata was lost.
     for (final id in selected) {
       if (known.containsKey(id)) continue;
-      if (id.startsWith('youtube:') || id.startsWith('audius:')) {
+      if (id.startsWith('youtube:')) {
         known[id] = Track(
           id: id,
-          title: id.startsWith('youtube:') ? 'YouTube track' : 'Audius track',
-          artist: id.startsWith('youtube:') ? 'YouTube' : 'Audius',
+          title: 'YouTube track',
+          artist: 'YouTube',
           uri: '',
         );
       }

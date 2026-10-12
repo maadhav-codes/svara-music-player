@@ -286,22 +286,21 @@ void main() {
     },
   );
 
-  test(
-    'disabled source rejects cached results and settings survive restart',
-    () async {
-      await repo.configure(enabled: false, quality: StreamQuality.dataSaver);
-      final restored = YouTubeRepository(store, channel: channel);
-      await restored.loadSettings();
-      expect(restored.enabled, false);
-      expect(restored.quality, StreamQuality.dataSaver);
-      await expectLater(
-        restored.search('music'),
-        throwsA(
-          isA<SourceException>().having((e) => e.code, 'code', 'disabled'),
-        ),
-      );
-    },
-  );
+  test('legacy disabled setting no longer gates discovery and quality survives restart', () async {
+    await store.write('youtubeEnabled', false);
+    await repo.configure(quality: StreamQuality.dataSaver);
+    final restored = YouTubeRepository(store, channel: channel);
+    await restored.loadSettings();
+    expect(restored.quality, StreamQuality.dataSaver);
+    messenger.setMockMethodCallHandler(
+      channel,
+      (_) async => {
+        'tracks': [dto],
+        'continuation': null,
+      },
+    );
+    expect((await restored.search('music')).tracks, isNotEmpty);
+  });
 
   test('expired or non-HTTPS streams and invalid IDs are rejected', () async {
     for (final data in [
@@ -322,7 +321,7 @@ void main() {
     );
   });
 
-  test('legacy Audius and local records migrate without losing identity', () {
+  test('legacy local records retain identity', () {
     final local = Track.fromJson({
       'id': 'local:external:42',
       'title': 'Local',
@@ -330,16 +329,6 @@ void main() {
       'uri': 'content://media/external/audio/media/42',
     });
     expect(local.source, MediaSource.local);
-    final audius = Track.fromJson({
-      'id': 'audius:xyz',
-      'title': 'Audius track',
-      'artist': 'Audius',
-      'uri': 'https://api.audius.co/v1/tracks/xyz/stream?api_key=old',
-      'online': true,
-    });
-    expect(audius.source, MediaSource.audius);
-    expect(audius.providerId, 'xyz');
-    expect(audius.toSavedJson().toString(), isNot(contains('api_key')));
     expect(reference.source, MediaSource.youtube);
   });
 }

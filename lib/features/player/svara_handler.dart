@@ -9,7 +9,6 @@ import 'package:just_audio/just_audio.dart';
 import '../../core/media_source.dart';
 import '../../core/store.dart';
 import '../../core/track.dart';
-import '../discovery/audius_repository.dart';
 import 'source_resolver.dart';
 
 /// Owns the durable logical queue. The engine receives only the selected source;
@@ -290,11 +289,7 @@ class SvaraHandler extends BaseAudioHandler with SeekHandler {
       // Exceptions from extractors are already sanitized; engine exceptions may
       // contain signed URLs and must never be displayed or persisted.
       _wantsPlay = false;
-      errors.add(
-        e is SourceException || e is DiscoveryException
-            ? e.toString()
-            : _playbackMessage,
-      );
+      errors.add(e is SourceException ? e.toString() : _playbackMessage);
       _broadcast();
       await save();
     }
