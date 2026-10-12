@@ -14,7 +14,6 @@ dependencies:
   dio: ^5.11.1
   sqflite: ^2.4.4+1
   path: ^1.9.1
-  path_provider: ^2.1.6
   svara_youtube:
     path: packages/svara_youtube
 dev_dependencies:

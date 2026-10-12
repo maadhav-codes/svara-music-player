@@ -12,7 +12,6 @@ class Track {
     this.folder = '',
     this.durationMs = 0,
     this.artwork,
-    this.artistId,
     bool online = false,
     MediaSource? source,
     this.streamable = true,
@@ -20,7 +19,7 @@ class Track {
   }) : _online = online,
        _source = source;
   final String id, title, artist, uri, album, folder;
-  final String? artwork, artistId;
+  final String? artwork;
   final int durationMs, modified;
   final bool _online, streamable;
   final MediaSource? _source;
@@ -44,7 +43,6 @@ class Track {
     'folder': folder,
     'durationMs': durationMs,
     'artwork': artwork,
-    'artistId': artistId,
     'online': online,
     'source': source.name,
     'streamable': streamable,
@@ -73,7 +71,6 @@ class Track {
     durationMs: (j['durationMs'] as num?)?.toInt() ?? 0,
     modified: (j['modified'] as num?)?.toInt() ?? 0,
     artwork: j['artwork'] as String?,
-    artistId: j['artistId'] as String?,
     online: j['online'] == true,
     source: MediaSource.values.where((s) => s.name == j['source']).firstOrNull,
     streamable: j['streamable'] != false,

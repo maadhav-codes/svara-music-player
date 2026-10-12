@@ -206,15 +206,6 @@ class YouTubeRepository {
     ], data['continuation'] as String?);
   }
 
-  Future<Track> metadata(Track reference, {CancelToken? cancel}) async {
-    _validate(reference);
-    return _track(
-      await _call('getMetadata', {
-        'videoId': reference.providerId,
-      }, cancel: cancel),
-    );
-  }
-
   void _validate(Track track) {
     if (track.source != MediaSource.youtube ||
         !RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(track.providerId)) {
@@ -279,7 +270,6 @@ class YouTubeRepository {
       artist: j['uploader'] as String? ?? 'Unknown uploader',
       uri: 'https://www.youtube.com/watch?v=$id',
       artwork: j['artwork'] as String?,
-      artistId: j['uploaderUrl'] as String?,
       durationMs: (j['durationMs'] as num? ?? 0).toInt(),
       source: MediaSource.youtube,
       streamable: j['streamable'] != false,

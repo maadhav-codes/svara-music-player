@@ -53,7 +53,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (call.method == "cancel") { cancel(call.argument<String>("requestId") ?: ""); result.success(null); return }
-        if (call.method !in setOf("search", "getMetadata", "resolveAudio")) { result.notImplemented(); return }
+        if (call.method !in setOf("search", "resolveAudio")) { result.notImplemented(); return }
         val id = call.argument<String>("requestId") ?: UUID.randomUUID().toString()
         val op = Operation(result)
         operations[id] = op
@@ -66,7 +66,6 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
                     initialize()
                     val answer = when (call.method) {
                         "search" -> search(call)
-                        "getMetadata" -> metadata(info(call))
                         else -> resolve(call)
                     }
                     main.post { if (op.finished.compareAndSet(false, true)) result.success(answer) }
@@ -122,7 +121,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         .minByOrNull { abs(it.width - 480) }?.url
     private fun metadata(info: StreamInfo): Map<String, Any?> = mapOf(
         "videoId" to info.id, "title" to info.name, "uploader" to info.uploaderName,
-        "uploaderUrl" to info.uploaderUrl, "durationMs" to maxOf(0, info.duration) * 1000,
+        "durationMs" to maxOf(0, info.duration) * 1000,
         "artwork" to artwork(info.thumbnails), "streamable" to (info.ageLimit == 0 && info.streamType == StreamType.VIDEO_STREAM)
     )
     private fun search(call: MethodCall): Map<String, Any?> {
@@ -153,7 +152,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
             .take(50).mapNotNull { item ->
             val id = try { ServiceList.YouTube.streamLHFactory.getId(item.url) } catch (_: Exception) { return@mapNotNull null }
             mapOf("videoId" to id, "title" to item.name, "uploader" to item.uploaderName,
-                "uploaderUrl" to item.uploaderUrl, "durationMs" to maxOf(0, item.duration) * 1000,
+                "durationMs" to maxOf(0, item.duration) * 1000,
                 "artwork" to artwork(item.thumbnails),
                 "streamable" to (item.streamType == StreamType.VIDEO_STREAM && item.contentAvailability in setOf(ContentAvailability.AVAILABLE, ContentAvailability.UNKNOWN)))
         }
