@@ -1,7 +1,7 @@
 name: svara
 description: An offline music library with YouTube discovery and streaming.
 publish_to: none
-version: 3.0.0+3000
+version: 3.1.0+3100
 environment:
   sdk: '>=3.13.0 <4.0.0'
 dependencies:

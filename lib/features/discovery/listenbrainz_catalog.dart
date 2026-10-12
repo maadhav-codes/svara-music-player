@@ -22,7 +22,7 @@ class ListenBrainzCatalog extends DiscoveryCatalog {
     'year': 'Yearly',
   };
   static const userAgent =
-      'Svara/3.0.0 (https://github.com/maadhav-codes/svara-music-player)';
+      'Svara/3.1.0 (https://github.com/maadhav-codes/svara-music-player)';
   static final _mbid = RegExp(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
   );

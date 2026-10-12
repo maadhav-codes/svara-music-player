@@ -8,6 +8,7 @@ This history is reconstructed from published GitHub releases and the source chan
 
 | Version                   | Released   | Android build number | Main changes                                                                       |
 | ------------------------- | ---------- | -------------------- | ---------------------------------------------------------------------------------- |
+| [3.1.0](#310--2026-10-12) | 2026-10-12 | 3100                 | Regional charts, swipeable tabs, playlist actions, library polish |
 | [3.0.0](#300--2026-10-12) | 2026-10-12 | 3000                 | Artist discovery and follows, YouTube-only streaming, library and storage overhaul |
 | [2.2.0](#220--2026-10-12) | 2026-10-12 | 2200                 | Dedicated Favorites collection and warm light/dark themes                          |
 | [2.1.1](#211--2026-10-12) | 2026-10-12 | 2101                 | Music-focused YouTube search and Settings improvements                             |
@@ -15,7 +16,9 @@ This history is reconstructed from published GitHub releases and the source chan
 | [2.0.0](#200--2026-10-11) | 2026-10-11 | 2000                 | Experimental YouTube support, multi-source playback, and GPL licensing             |
 | [1.0.0](#100--2026-10-11) | 2026-10-11 | 1                    | Initial local music player with Audius discovery                                   |
 
-## Unreleased
+## 3.1.0 — 2026-10-12
+
+[Published release](https://github.com/maadhav-codes/svara-music-player/releases/tag/v3.1.0) · [Changes since v3.0.0](https://github.com/maadhav-codes/svara-music-player/compare/v3.0.0...v3.1.0) · Build **3100**
 
 ### Tester feedback fixes
 
@@ -29,11 +32,18 @@ This history is reconstructed from published GitHub releases and the source chan
 - Added deterministic matching, cancellation, provider-error and playlist-state coverage; updated UI regression tests and light/dark previews.
 - Completed a live Android audit of 30 source identities: 19 metadata-verified matches decoded, 11 conservatively unmatched, zero known incorrect substitutions in the reviewed sample. Added isolated audit installs and automated Home/background playback verification.
 
+### Navigation and UI polish
+
+- Implemented swipeable tab navigation with horizontal gestures between Library, Discover, and Playlists while preserving view states, search inputs, and scroll offsets.
+- Enhanced empty playlist state with secondary discovery navigation actions.
+- Polished library permission handling and empty state guidance.
+- Updated package and in-app version to **3.1.0**.
+
 ### Documentation
 
 - Rewrote the README with a feature overview, installation instructions, everyday usage guides, privacy and permissions explanations, developer quick start, and troubleshooting.
 - Removed the separate deferred-motion document.
-- Added this changelog with all six published versions and an index of every commit in the available history.
+- Added this changelog with all seven published versions and an index of every commit in the available history.
 
 ## 3.0.0 — 2026-10-12
 
@@ -241,9 +251,14 @@ This history is reconstructed from published GitHub releases and the source chan
 
 Every commit reachable from the current branch is grouped below by the first release tag that contains it. This includes release-version bumps, smaller refactors, tests, and documentation commits. Tag annotations and changes to GitHub repository metadata are not source commits.
 
-### Unreleased commits
+### 3.1.0 commits
 
 - [ef1dba9](https://github.com/maadhav-codes/svara-music-player/commit/ef1dba972bfbfa9da8e007a8deeae267cfc03796) — docs: restructure README and add development guide
+- [7cf5640](https://github.com/maadhav-codes/svara-music-player/commit/7cf564023c87cb56b3e811fd94b582d6e1b92bcf) — docs: add comprehensive changelog and update README navigation
+- [49dfd66](https://github.com/maadhav-codes/svara-music-player/commit/49dfd66e744185fe8c715fba26e387063d8ff436) — feat(discovery): replace keyword search with ranked regional charts
+- [453f36d](https://github.com/maadhav-codes/svara-music-player/commit/453f36dbcb03dbe9201f6630f9d997a6e133d15b) — refactor(library): improve permission handling and library UI polish
+- [fd6602f](https://github.com/maadhav-codes/svara-music-player/commit/fd6602f6bc14588e33f3c3a06a2a6b297c8cf15f) — refactor(playlists): enhance empty state with secondary navigation actions
+- [c417ca4](https://github.com/maadhav-codes/svara-music-player/commit/c417ca41a318285514f7756fdf18f260f8983274) — feat(navigation): implement swipeable tabs with state preservation
 
 ### 3.0.0 commits
 
