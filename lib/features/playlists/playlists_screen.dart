@@ -100,8 +100,8 @@ Future<void> addToPlaylist(
 }
 
 class PlaylistsScreen extends ConsumerStatefulWidget {
-  const PlaylistsScreen({this.onLibrary, super.key});
-  final VoidCallback? onLibrary;
+  const PlaylistsScreen({this.onLibrary, this.onDiscover, super.key});
+  final VoidCallback? onLibrary, onDiscover;
   @override
   ConsumerState<PlaylistsScreen> createState() => _PlaylistsScreenState();
 }
@@ -132,6 +132,8 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(top: 16, bottom: 24),
         children: [
           if (!playlists.isLoading && !playlists.hasError && lists.isNotEmpty)
             Padding(
@@ -158,8 +160,9 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
               ref
                   .watch(favoriteTracksProvider)
                   .when(
-                    data: (tracks) =>
-                        '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'} • Saved with the heart',
+                    data: (tracks) => tracks.isEmpty
+                        ? 'Save songs you love'
+                        : '${tracks.length} saved ${tracks.length == 1 ? 'song' : 'songs'}',
                     loading: () => 'Loading favorites…',
                     error: (_, _) => 'Could not load favorites. Pull to retry.',
                   ),
@@ -188,7 +191,13 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
               message: 'Tap a song’s heart to save it in Favorites, or create a playlist for a mood.',
               actionLabel: 'Create playlist',
               onAction: createPlaylist,
-              icon: Icons.queue_music,
+              secondaryActionLabel: widget.onDiscover != null
+                  ? 'Discover music'
+                  : widget.onLibrary != null
+                  ? 'Browse songs'
+                  : null,
+              onSecondaryAction: widget.onDiscover ?? widget.onLibrary,
+              icon: Icons.library_add_outlined,
             ),
           ...lists.map(
             (p) => ListTile(

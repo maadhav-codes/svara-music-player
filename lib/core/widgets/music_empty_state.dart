@@ -6,12 +6,16 @@ class MusicEmptyState extends StatelessWidget {
     required this.message,
     required this.actionLabel,
     required this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
     this.icon = Icons.music_note_rounded,
     super.key,
   });
 
   final String title, message, actionLabel;
   final VoidCallback onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
   final IconData icon;
 
   @override
@@ -66,6 +70,13 @@ class MusicEmptyState extends StatelessWidget {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 20),
           FilledButton(onPressed: onAction, child: Text(actionLabel)),
+          if (secondaryActionLabel != null && onSecondaryAction != null) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: onSecondaryAction,
+              child: Text(secondaryActionLabel!),
+            ),
+          ],
         ],
       ),
     );

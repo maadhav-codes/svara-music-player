@@ -92,7 +92,10 @@ class _HomeState extends ConsumerState<Home> {
       children: [
         LibraryScreen(onDiscover: () => setState(() => index = 1)),
         const DiscoveryScreen(),
-        PlaylistsScreen(onLibrary: () => setState(() => index = 0)),
+        PlaylistsScreen(
+          onLibrary: () => setState(() => index = 0),
+          onDiscover: () => setState(() => index = 1),
+        ),
       ],
     ),
     bottomNavigationBar: Column(

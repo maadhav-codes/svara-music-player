@@ -282,6 +282,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       await captureThemes('playlists-empty');
+      await tester.tap(find.text('Discover music'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        1,
+      );
       await tester.tap(
         find.descendant(
           of: find.byType(NavigationBar),

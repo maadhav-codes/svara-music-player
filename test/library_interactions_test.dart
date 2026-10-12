@@ -321,7 +321,7 @@ void main() {
       );
       await settle(tester);
       expect(find.text('Favorites'), findsOneWidget);
-      expect(find.text('1 track • Saved with the heart'), findsOneWidget);
+      expect(find.text('1 saved song'), findsOneWidget);
       await tester.tap(find.text('Favorites'));
       await settle(tester);
       expect(find.text('First light'), findsOneWidget);
@@ -343,7 +343,7 @@ void main() {
       );
       await tester.tap(find.byType(BackButton));
       await settle(tester);
-      expect(find.text('0 tracks • Saved with the heart'), findsOneWidget);
+      expect(find.text('Save songs you love'), findsOneWidget);
       await tester.tap(find.byType(BackButton));
       await settle(tester);
       expect(find.byTooltip('Favorite'), findsOneWidget);

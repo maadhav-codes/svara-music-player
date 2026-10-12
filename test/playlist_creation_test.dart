@@ -22,6 +22,7 @@ void main() {
         store = await Store.open(path: inMemoryDatabasePath);
       });
       final pending = Completer<List<Playlist>>();
+      var discovered = false;
       try {
         await tester.pumpWidget(
           ProviderScope(
@@ -29,7 +30,11 @@ void main() {
               storeProvider.overrideWithValue(store),
               playlistsProvider.overrideWith((ref) => pending.future),
             ],
-            child: const MaterialApp(home: Scaffold(body: PlaylistsScreen())),
+            child: MaterialApp(
+              home: Scaffold(
+                body: PlaylistsScreen(onDiscover: () => discovered = true),
+              ),
+            ),
           ),
         );
         await tester.pump();
@@ -59,6 +64,18 @@ void main() {
           find.text('Make a playlist of your own'),
           scenario == 'empty' ? findsOneWidget : findsNothing,
         );
+        if (scenario == 'empty') {
+          expect(find.text('Save songs you love'), findsOneWidget);
+          expect(find.text('0 tracks'), findsNothing);
+          await tester.tap(find.text('Discover music'));
+          expect(discovered, isTrue);
+          tester.platformDispatcher.textScaleFactorTestValue = 2;
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          tester.platformDispatcher.clearTextScaleFactorTestValue();
+        } else {
+          expect(find.text('Discover music'), findsNothing);
+        }
         if (scenario == 'error') {
           expect(find.text('Retry playlists'), findsOneWidget);
         }
