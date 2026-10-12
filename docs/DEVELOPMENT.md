@@ -54,7 +54,7 @@ lib/
 ├── core/                    # Track/source models, Riverpod providers, SQLite, artwork
 └── features/
     ├── library/             # Android MediaStore bridge, library filters and song options
-    ├── discovery/           # YouTube repository, categories and search UI
+    ├── discovery/           # YouTube search, ranked catalog contract and browse/search UI
     ├── player/              # Audio handler, source resolution, queue and player UI
     ├── playlists/           # Playlist persistence and management
     ├── lyrics/              # LRC parsing, LRCLIB lookup and lyrics UI
@@ -69,7 +69,7 @@ integration_test/           # Live Android YouTube playback smoke test
 assets/licenses/            # Bundled software license notices
 ```
 
-Riverpod wires repositories and app state. SQLite (`sqflite`) holds durable data; Dio handles lyrics requests. `just_audio` plays audio, `audio_service` exposes background/media controls, and `audio_session` handles audio focus.
+Riverpod wires repositories and app state. SQLite (`sqflite`) holds durable data; Dio handles lyrics requests and the optional approved discovery catalog. `just_audio` plays audio, `audio_service` exposes background/media controls, and `audio_session` handles audio focus.
 
 `Track.source` identifies local or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. Queues preserve every playable track without a size cap. `SvaraHandler` passes local URIs directly to the audio engine and resolves YouTube references at playback time. The audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
 
@@ -185,3 +185,23 @@ Search responses, fetched artwork, and online lyrics use a bounded session-memor
 ## Dependency notices
 
 Flutter collects Dart package licenses automatically. `lib/core/licenses.dart` adds the bundled notices for native Gradle dependencies. Keep [native dependency notices](../assets/licenses/NOTICE.txt) and their license files alongside the corresponding dependencies when changing the build.
+
+## Ranked discovery
+
+Default builds use the official YouTube Top 100 Songs playlists for India and UK through the existing native extractor; no account, API key or backend is needed. Playlist IDs, title and owner channel are verified; exact video references replace cross-service matching. The earlier ListenBrainz audit is historical. Optional `--dart-define=DISCOVERY_CATALOG_URL=https://your-approved-host/v1` selects the approved-catalog contract instead. Secrets remain server-side.
+
+The adapter fetches only aggregate rankings and recording IDs. Never send local history or follows. Each API client is serialized at 1.1-second intervals; observe Retry-After and rate-reset headers. Genre tags/artwork are supplementary data and are not part of this CC0 adapter. Country charts and recording-language/mood filters remain unsupported.
+
+`RankedMatcher` makes at most two concurrent YouTube Music searches for a ten-entry page, preserves rank order, and rejects uncertain versions/recordings. The plugin retains the song-catalog result type and artist URL; canonical title/uploader remain separate from provider artists. Audio resolves only at playback. Do not broaden matching or add aliases without targeted tests and a relevance review.
+
+### Isolated Android live checks
+
+Use `SVARA_AUDIT_BUILD=true` to build `app.svara.audit` and preserve regular Svara storage. This changes the test application ID, not the source namespace or release version. Keep the phone unlocked while installing.
+
+```sh
+SVARA_AUDIT_BUILD=true flutter test integration_test/discovery_probe_test.dart -d DEVICE_ID
+SVARA_AUDIT_BUILD=true flutter test integration_test/ranked_discovery_device_test.dart -d DEVICE_ID
+python3 tools/run_android_smoke.py --device DEVICE_ID --adb /absolute/path/to/adb
+```
+
+The audit test samples 30 distinct identities across three reporting scopes, logs only public catalog/candidate metadata and checks muted decoding for accepted candidates. Review the output manually before reporting accuracy; automated acceptance is not the review. The smoke runner sends Home at the background marker and checks the existing fixture test’s continued playback. Store raw logs under ignored `docs/device-measurements/` or temporary paths; exclude stream URLs/headers and user data from published audit artifacts.

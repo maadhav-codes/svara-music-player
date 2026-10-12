@@ -17,10 +17,21 @@ This history is reconstructed from published GitHub releases and the source chan
 
 ## Unreleased
 
+### Tester feedback fixes
+
+- Compacted Discover with an in-search filter action and grouped source metadata; spaced song rows, explicit 48px menu targets, and a thin mini-player progress line with subtle surface separation.
+
+- Moved Quick Mix to Library options as “Mix my library”; hide followed-artist suggestions during local search/filtering.
+- Separated Discover Browse and Search with clear-search and visible Songs/Artists selection; removed keyword language/genre filtering and preserved upstream search relevance.
+- Removed generic Trending/Charts/mood presets. Prepared a bounded ranked-catalog adapter and strict YouTube recording matching with provider evidence retained separately. Official YouTube weekly Top 100 Songs playlists for India and UK replace the fan-heavy ListenBrainz default. Fixed chart/owner identity checks, exact playback IDs, source/fetch captions and snapshot pagination preserve regional chart order. Genre and language collections stay hidden.
+- Moved player source attribution and Open in YouTube to Song options → Track Info.
+- Show one top-level Create playlist action per loaded state, with Favorites intact and contextual New playlist retained.
+- Added deterministic matching, cancellation, provider-error and playlist-state coverage; updated UI regression tests and light/dark previews.
+- Completed a live Android audit of 30 source identities: 19 metadata-verified matches decoded, 11 conservatively unmatched, zero known incorrect substitutions in the reviewed sample. Added isolated audit installs and automated Home/background playback verification.
+
 ### Documentation
 
 - Rewrote the README with a feature overview, installation instructions, everyday usage guides, privacy and permissions explanations, developer quick start, and troubleshooting.
-- Moved detailed architecture, testing, signing, and release instructions into [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 - Removed the separate deferred-motion document.
 - Added this changelog with all six published versions and an index of every commit in the available history.
 

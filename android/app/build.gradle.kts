@@ -26,6 +26,8 @@ require(releaseSigningValues.all { it == null } || hasReleaseSigning) {
 require(System.getenv("REQUIRE_RELEASE_SIGNING") != "true" || hasReleaseSigning) {
     "CI releases require a release keystore; debug signing is not permitted."
 }
+// Isolate live audit installs from the user's regular Svara data.
+val auditBuild = System.getenv("SVARA_AUDIT_BUILD") == "true"
 android {
     namespace = "app.svara"
     compileSdk = flutter.compileSdkVersion
@@ -36,7 +38,7 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
     defaultConfig {
-        applicationId = "app.svara"
+        applicationId = if (auditBuild) "app.svara.audit" else "app.svara"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -134,35 +134,42 @@ void main() {
     expect((sent.last['query'] as String).length, 300);
   });
 
-  test('music search stably favors audio uploads and caches results', () async {
-    var calls = 0;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      calls++;
-      expect((call.arguments as Map)['query'], 'Batman music');
-      return {
-        'tracks': [
-          {...dto, 'videoId': 'aaaaaaaaaaa', 'uploader': 'Other artist'},
-          {...dto, 'videoId': 'bbbbbbbbbbb', 'uploader': 'Composer - Topic'},
-          {...dto, 'videoId': 'ccccccccccc', 'uploader': 'ArtistVEVO'},
-          {...dto, 'videoId': 'ddddddddddd', 'title': 'Theme (Official Audio)'},
-          {...dto, 'videoId': 'eeeeeeeeeee', 'uploader': 'Another artist'},
-        ],
-        'continuation': 'music-page',
-      };
-    });
-    final first = await repo.search('Batman');
-    expect(first.tracks.map((t) => t.providerId), [
-      'bbbbbbbbbbb',
-      'ccccccccccc',
-      'ddddddddddd',
-      'aaaaaaaaaaa',
-      'eeeeeeeeeee',
-    ]);
-    expect(first.continuation, 'music-page');
-    final cached = await repo.search('Batman');
-    expect(cached.tracks.map((t) => t.id), first.tracks.map((t) => t.id));
-    expect(calls, 1);
-  });
+  test(
+    'music search preserves upstream relevance and caches results',
+    () async {
+      var calls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls++;
+        expect((call.arguments as Map)['query'], 'Batman music');
+        return {
+          'tracks': [
+            {...dto, 'videoId': 'aaaaaaaaaaa', 'uploader': 'Other artist'},
+            {...dto, 'videoId': 'bbbbbbbbbbb', 'uploader': 'Composer - Topic'},
+            {...dto, 'videoId': 'ccccccccccc', 'uploader': 'ArtistVEVO'},
+            {
+              ...dto,
+              'videoId': 'ddddddddddd',
+              'title': 'Theme (Official Audio)',
+            },
+            {...dto, 'videoId': 'eeeeeeeeeee', 'uploader': 'Another artist'},
+          ],
+          'continuation': 'music-page',
+        };
+      });
+      final first = await repo.search('Batman');
+      expect(first.tracks.map((t) => t.providerId), [
+        'aaaaaaaaaaa',
+        'bbbbbbbbbbb',
+        'ccccccccccc',
+        'ddddddddddd',
+        'eeeeeeeeeee',
+      ]);
+      expect(first.continuation, 'music-page');
+      final cached = await repo.search('Batman');
+      expect(cached.tracks.map((t) => t.id), first.tracks.map((t) => t.id));
+      expect(calls, 1);
+    },
+  );
 
   test(
     'empty filtered pages retain their continuation for further music results',

@@ -1,3 +1,7 @@
+import 'package:svara/features/discovery/ranked_discovery.dart';
+import 'package:svara/features/discovery/regional_youtube_catalog.dart';
+import 'package:dio/dio.dart';
+
 import 'dart:io';
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -16,6 +20,51 @@ import 'package:svara/svara_app.dart';
 import 'package:svara/features/player/player_screen.dart';
 
 import 'player_test.dart' show MemoryPlayer;
+
+class PreviewCatalog extends DiscoveryCatalog {
+  @override
+  bool get configured => true;
+  @override
+  Future<BrowseCapabilities> capabilities({CancelToken? cancel}) async =>
+      const BrowseCapabilities(
+        RegionalYouTubeCatalog.markets,
+        [],
+        scopes: {'week': 'Weekly Top 100'},
+        browseTitle: 'Popular songs',
+      );
+  @override
+  Future<RankedPage> page({
+    required String market,
+    String? genre,
+    String scope = 'week',
+    String? cursor,
+    CancelToken? cancel,
+  }) async => RankedPage(
+    entries: const [
+      CatalogRecording(
+        id: 'preview',
+        title: 'Quiet song',
+        artists: [],
+        rank: 1,
+        durationMs: 180000,
+        sourceUrl: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn4pTWyM3t61lOyZ6_4jcNOw',
+        playback: Track(
+          id: 'youtube:aaaaaaaaaaa',
+          title: 'Quiet song',
+          artist: 'Aria',
+          durationMs: 180000,
+          uri: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+        ),
+      ),
+    ],
+    sourceName: 'YouTube Charts (preview)',
+    market: market,
+    scope: scope,
+    fetchedAt: DateTime.utc(2026, 10, 12),
+    expiresAt: DateTime.now().add(const Duration(hours: 1)),
+    chartUrl: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn4pTWyM3t61lOyZ6_4jcNOw',
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -98,10 +147,40 @@ void main() {
             }
             return null;
           });
+      const youtubeChannel = MethodChannel('app.svara/youtube');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        youtubeChannel,
+        (call) async {
+          if (call.method == 'cancel') return null;
+          if (call.method == 'resolveAudio') {
+            return {
+              'url': 'https://audio.example/stream',
+              'track': {
+                'videoId': 'aaaaaaaaaaa',
+                'title': 'Test video',
+                'uploader': 'Test uploader',
+                'durationMs': 90000,
+              },
+            };
+          }
+          return {
+            'tracks': [
+              {
+                'videoId': 'aaaaaaaaaaa',
+                'title': 'Quiet song',
+                'uploader': 'Aria - Topic',
+                'durationMs': 180000,
+              },
+            ],
+            'continuation': null,
+          };
+        },
+      );
       final boundary = GlobalKey();
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            discoveryCatalogProvider.overrideWithValue(PreviewCatalog()),
             storeProvider.overrideWithValue(store),
             handlerProvider.overrideWithValue(handler),
           ],
@@ -154,10 +233,47 @@ void main() {
       }
 
       await captureThemes('library');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Discover'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await captureThemes('discovery-browse');
+      await tester.enterText(find.byType(TextField), 'quiet song');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      await captureThemes('discovery-search');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Playlists'),
+        ),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 80)),
+      );
+      await tester.pumpAndSettle();
+      await captureThemes('playlists-empty');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Library'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
       await tester.runAsync(() async {
         await handler.setQueue(songs, index: 0, start: false);
       });
       await tester.pumpAndSettle();
+      await tester.runAsync(() => handler.seek(const Duration(seconds: 45)));
+      await tester.pumpAndSettle();
+      await captureThemes('mini-player');
       await tester.tap(find.byType(MiniPlayer));
       await tester.pumpAndSettle();
       expect(find.text('Now playing'), findsOneWidget);
@@ -194,10 +310,23 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byType(MiniPlayer));
       await tester.pumpAndSettle();
-      expect(find.text('STREAMING FROM YOUTUBE'), findsOneWidget);
-      expect(find.text('Open video in YouTube'), findsOneWidget);
+      expect(find.text('STREAMING FROM YOUTUBE'), findsNothing);
+      expect(find.text('Open video in YouTube'), findsNothing);
+      await tester.tap(find.byTooltip('Song options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Track Info'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open in YouTube'), findsOneWidget);
+      expect(find.text('Source'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Source'))).pop();
+      await tester.pumpAndSettle();
       expect(find.text('0:42'), findsOneWidget);
+      await captureThemes('online-player');
       expect(tester.takeException(), null);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        youtubeChannel,
+        null,
+      );
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() async {
         await handler.dispose();

@@ -133,19 +133,20 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
       onRefresh: load,
       child: ListView(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FilledButton.icon(
-                  onPressed: createPlaylist,
-                  icon: const Icon(Icons.add),
-                  label: const Text('New playlist'),
-                ),
-              ],
+          if (!playlists.isLoading && !playlists.hasError && lists.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FilledButton.icon(
+                    onPressed: createPlaylist,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create playlist'),
+                  ),
+                ],
+              ),
             ),
-          ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -178,7 +179,10 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
             const Center(child: CircularProgressIndicator()),
           if (playlists.hasError)
             TextButton(onPressed: load, child: const Text('Retry playlists')),
-          if (playlists.hasValue && lists.isEmpty)
+          if (!playlists.isLoading &&
+              !playlists.hasError &&
+              playlists.hasValue &&
+              lists.isEmpty)
             MusicEmptyState(
               title: 'Make a playlist of your own',
               message: 'Tap a song’s heart to save it in Favorites, or create a playlist for a mood.',

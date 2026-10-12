@@ -1,3 +1,4 @@
+import 'package:svara/features/discovery/ranked_discovery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,6 +86,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              discoveryCatalogProvider.overrideWithValue(DiscoveryCatalog()),
               storeProvider.overrideWithValue(store),
               handlerProvider.overrideWithValue(handler),
             ],
@@ -92,31 +94,14 @@ void main() {
           ),
         );
         await settle();
-        // Compact header leaves the first music result visible without scrolling.
-        expect(find.text('Quiet song').hitTestable(), findsOneWidget);
-        expect(tester.getTopLeft(find.text('Quiet song')).dy, lessThan(320));
-        await tester.tap(find.byTooltip('Language'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Spanish'));
-        await settle();
-        await tester.tap(find.text('Genres'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilterChip, 'Latin'));
-        await tester.tap(find.widgetWithText(FilterChip, 'Rock'));
-        await tester.tap(find.text('Apply'));
-        await settle();
-        expect(queries.last, contains('Spanish Latin Rock'));
-        expect(find.text('Quiet song'), findsNothing); // No selected labels.
-        expect(
-          find.textContaining('Unlabeled recordings are omitted'),
-          findsOneWidget,
-        );
-        await tester.tap(find.byTooltip('Search type'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Artists'));
-        await settle();
+        expect(queries, isEmpty);
         await tester.enterText(find.byType(TextField), 'Aria');
         await tester.pump(const Duration(milliseconds: 400));
+        await settle();
+        // Unlabeled songs remain visible, then switch using the visible control.
+        expect(find.text('Quiet song').hitTestable(), findsOneWidget);
+        expect(tester.getTopLeft(find.text('Quiet song')).dy, lessThan(320));
+        await tester.tap(find.text('Artists'));
         await settle();
         await tester.tap(find.widgetWithText(ListTile, 'Aria'));
         await settle();

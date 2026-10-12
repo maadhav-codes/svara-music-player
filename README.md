@@ -24,8 +24,8 @@ Svara (स्वर) means “musical note” or “voice.” There are no ads, 
 | Feature                 | What you can do                                                              |
 | ----------------------- | ---------------------------------------------------------------------------- |
 | Local library           | Search and browse songs by artist, album, folder, or recently played.        |
-| Quick Mix               | Play a mix of local favorites and less recently played songs.                |
-| Online discovery        | Search YouTube music, explore categories, and filter by language or genre.   |
+| Mix my library          | Mix local favorites and less recently played songs from Library options.     |
+| Online discovery        | Browse real community charts or search YouTube songs and artists.            |
 | Artist follows          | Save artists locally and browse their tracks, releases, and radio playlists. |
 | Playlists and favorites | Save local and online tracks, and reorder playlist tracks.                   |
 | Playback                | Manage the queue, shuffle, repeat, and control playback in the background.   |
@@ -56,7 +56,7 @@ If a release offers several APKs, choose `arm64-v8a` for most modern phones, `ar
 Copy music onto your phone using USB or a file manager, then open **Library** and pull down to refresh or tap its refresh button. Svara reads Android’s media index; it does not import or duplicate your audio files.
 
 - Browse **All**, **Artists**, **Albums**, **Folders**, or **Recently played**. Use search and sorting to find a song.
-- Tap a song to play it, or tap **Quick Mix** to start a mix of local tracks.
+- Tap a song to play it, or choose **Library options → Mix my library** to start a mix of local tracks.
 - Open a song’s **⋮ Song options** menu to favorite it, add it to a playlist, play it next, add it to the queue, or view file details.
 
 ### Control playback
@@ -87,11 +87,13 @@ Favorites and playlists survive app restarts. **Saving an online track stores a 
 
 ### Discover online music and artists
 
-Open **Discover** and enter a search, or tap a category such as **Trending Today**, **Top Charts**, **Chill / Lofi**, **Workout**, **Pop**, or **Rock**. Tap **Load more** when available. Searches, results, and scroll positions remain available when switching tabs.
+Open **Discover** and enter a song or artist in **Search songs or artists**. A visible **Songs / Artists** control appears below the field. Clear the field to return to Browse. Tap **Load more** when available. Searches, results, and scroll positions remain available when switching tabs.
 
-Use **Language** and **Genres** to narrow results. These filters match labels in titles and channel metadata; they do not detect the language of the audio. Combined filters require every selected label, so they can hide relevant songs. Category names describe suggested searches, not verified global charts.
+Browse shows **Popular songs** from YouTube's official weekly Top 100 Songs playlists. India is the default; **Browse preferences** switches to the United Kingdom for international music. Source order, playback IDs and fetch time are preserved. These are regional YouTube charts, not personalized recommendations or recording-language filters. Genre and mood collections remain hidden until verified sources support them. Failed chart requests show a retry state; there is no ListenBrainz fallback.
 
-To follow an artist, switch the search field’s **Songs / Artists** menu to Artists, open a profile, and tap **Follow artist**. Find suggestions in **Library → From your artists**, under Tracks, Releases, and Radios. Use its artist menu to reopen a profile and unfollow. Following stays on your phone and does not subscribe a YouTube account. Profiles and recommendations depend on the information available from the provider.
+To follow an artist, enter a search, select **Artists**, open a profile, and tap **Follow artist**. Find suggestions in **Library → From your artists**, under Tracks, Releases, and Radios. These suggestions are hidden during local search and filtering. Use its artist menu to reopen a profile and unfollow. Following stays on your phone and does not subscribe a YouTube account. Profiles and suggestions depend on the information available from YouTube.
+
+The full player shows title and artist prominently. Open **Song options → Track Info** for source attribution and **Open in YouTube**.
 
 Choose audio quality in **Settings → Streaming & Discovery**: Data saver (64 kbps), Standard (128 kbps), or High (256 kbps). These are targets; the actual bitrate depends on the available stream.
 
@@ -120,7 +122,7 @@ A usable local lyrics file takes priority. Otherwise, Svara searches LRCLIB usin
 
 ## Privacy and permissions
 
-Svara stores its library index, favorites, playlists, settings, listening history, and playback state on your phone. Use **Settings → Clear listening history** to remove the history used by Quick Mix. Android cloud backup is disabled.
+Svara stores its library index, favorites, playlists, settings, listening history, and playback state on your phone. Regional chart requests go to YouTube; no listening history or followed artists are submitted for these charts. Use **Settings → Clear listening history** to remove the history used by Mix my library. Android cloud backup is disabled.
 
 Online features contact YouTube, its stream/artwork hosts, and LRCLIB. These providers receive requests and normal network information; lyrics lookup sends song metadata. Local playback works without internet, but opening lyrics may trigger a lookup when a usable local file is unavailable.
 
@@ -173,7 +175,7 @@ See the [development guide](docs/DEVELOPMENT.md) for the codebase map, storage a
 | Audio access is denied           | Tap **Allow music access / Retry**, or **Open app settings** and grant audio access.                                          |
 | Songs are missing                | Confirm files are on the phone, then refresh Library. Android must index them; folders hidden with `.nomedia` may not appear. |
 | A local song will not play       | Check that the file exists, permission is granted, and your device supports its encoding.                                     |
-| Discover has no results          | Check connectivity, try another query, or loosen filters. An empty page may still offer **Load more**.                        |
+| Discover has no results          | Check connectivity, try another song or artist query. An empty page may still offer **Load more**.                            |
 | YouTube playback fails           | Retry or check for an app update. Provider restrictions or extractor changes can prevent playback.                            |
 | Lyrics are missing or incorrect  | Check title/artist tags, or add a matching `.lrc` file and grant access to its exact folder.                                  |
 | Gradle cannot fetch dependencies | Check the JDK, Android SDK, and network access to Google Maven, Maven Central, and JitPack.                                   |

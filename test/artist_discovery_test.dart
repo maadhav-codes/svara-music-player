@@ -7,7 +7,6 @@ import 'package:svara/core/providers.dart';
 import 'package:svara/core/store.dart';
 import 'package:svara/features/discovery/artist.dart';
 import 'package:svara/features/discovery/artist_favorites.dart';
-import 'package:svara/features/discovery/discovery_filters.dart';
 import 'package:svara/features/discovery/personalized_feed.dart';
 import 'package:svara/features/discovery/youtube_repository.dart';
 
@@ -33,57 +32,28 @@ void main() {
     await store.db.close();
   });
 
-  test('language and multiple genres use conjunction and token boundaries', () {
-    const filters = DiscoveryFilters(
-      language: 'Spanish',
-      genres: {'Latin', 'Rock'},
-    );
-    expect(filters.query('road trip'), 'road trip Spanish Latin Rock');
-    expect(filters.matches('Spanish Latin Rock', 'Band'), true);
-    expect(filters.matches('Latin Rock', 'Spanish Band'), true);
-    expect(filters.matches('Spanish Latin Pop', 'Band'), false);
-    expect(filters.matches('English Latin Rock', 'Band'), false);
-    expect(filters.matches('Spanish Latin Rocket', 'Band'), false);
-  });
-  test('compound search removes mismatches without losing filtered-page continuation', () async {
-    final requests = <Map>[];
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      requests.add(call.arguments as Map);
-      return {
-        'tracks': [
-          {
-            'videoId': 'aaaaaaaaaaa',
-            'title': 'Spanish Latin Rock',
-            'uploader': 'Band',
-          },
-          {
-            'videoId': 'bbbbbbbbbbb',
-            'title': 'English Rock',
-            'uploader': 'Band',
-          },
-        ],
-        'continuation': 'next',
-      };
-    });
-    const filters = DiscoveryFilters(
-      language: 'Spanish',
-      genres: {'Latin', 'Rock'},
-    );
-    final first = await repo.search('road trip', filters: filters);
-    expect(first.tracks.single.providerId, 'aaaaaaaaaaa');
-    expect(requests.single['query'], 'road trip Spanish Latin Rock music');
-    await repo.search(
-      'road trip',
-      filters: filters,
-      continuation: first.continuation,
-    );
-    expect(requests.last['query'], requests.first['query']);
-    expect(requests.last['continuation'], 'next');
-    const emptyFilter = DiscoveryFilters(language: 'French', genres: {'Jazz'});
-    final empty = await repo.search('road trip', filters: emptyFilter);
-    expect(empty.tracks, isEmpty);
-    expect(empty.continuation, 'next');
-  });
+  test(
+    'typed search retains recordings without language or genre labels',
+    () async {
+      messenger.setMockMethodCallHandler(
+        channel,
+        (call) async => {
+          'tracks': [
+            {'videoId': 'aaaaaaaaaaa', 'title': 'A song', 'uploader': 'Band'},
+            {
+              'videoId': 'bbbbbbbbbbb',
+              'title': 'Another song',
+              'uploader': 'Artist - Topic',
+            },
+          ],
+          'continuation': 'next',
+        },
+      );
+      final page = await repo.search('road trip');
+      expect(page.tracks.map((t) => t.title), ['A song', 'Another song']);
+      expect(page.continuation, 'next');
+    },
+  );
   test(
     'artist attribution uses identity when available, not a same-name channel',
     () async {
@@ -117,7 +87,7 @@ void main() {
           'Aria songs',
           artist: artist,
         )).tracks.map((t) => t.providerId),
-        ['ccccccccccc', 'aaaaaaaaaaa'],
+        ['aaaaaaaaaaa', 'ccccccccccc'],
       );
     },
   );

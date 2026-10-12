@@ -57,7 +57,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (call.method == "cancel") { cancel(call.argument<String>("requestId") ?: ""); result.success(null); return }
-        if (call.method !in setOf("search", "resolveAudio", "artist", "collection")) { result.notImplemented(); return }
+        if (call.method !in setOf("search", "resolveAudio", "artist", "collection", "musicCharts")) { result.notImplemented(); return }
         val id = call.argument<String>("requestId") ?: UUID.randomUUID().toString()
         val op = Operation(result)
         operations[id] = op
@@ -72,6 +72,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
                         "search" -> search(call)
                         "artist" -> artist(call)
                         "collection" -> collection(call)
+                        "musicCharts" -> musicCharts(call)
                         else -> resolve(call)
                     }
                     main.post { if (op.finished.compareAndSet(false, true)) result.success(answer) }
@@ -127,6 +128,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         .minByOrNull { abs(it.width - 480) }?.url
     private fun metadata(info: StreamInfo): Map<String, Any?> = mapOf(
         "videoId" to info.id, "title" to info.name, "uploader" to info.uploaderName,
+        "uploaderUrl" to info.uploaderUrl,
         "durationMs" to maxOf(0, info.duration) * 1000,
         "artwork" to artwork(info.thumbnails), "streamable" to (info.ageLimit == 0 && info.streamType == StreamType.VIDEO_STREAM)
     )
@@ -165,7 +167,9 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
             .take(50).mapNotNull { item ->
             val id = try { ServiceList.YouTube.streamLHFactory.getId(item.url) } catch (_: Exception) { return@mapNotNull null }
             mapOf("videoId" to id, "title" to item.name, "uploader" to item.uploaderName,
-                "uploaderUrl" to item.uploaderUrl, "durationMs" to maxOf(0, item.duration) * 1000,
+                "uploaderUrl" to item.uploaderUrl,
+                "musicCatalogSong" to (filter == YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
+                "durationMs" to maxOf(0, item.duration) * 1000,
                 "artwork" to artwork(item.thumbnails),
                 "streamable" to (item.streamType == StreamType.VIDEO_STREAM && item.contentAvailability in setOf(ContentAvailability.AVAILABLE, ContentAvailability.UNKNOWN)))
         }
@@ -196,6 +200,27 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         val info = ChannelInfo.getInfo(ServiceList.YouTube, url)
         return mapOf("url" to url, "name" to info.name, "artwork" to artwork(info.avatars),
             "description" to info.description, "subscribers" to info.subscriberCount)
+    }
+    private fun musicCharts(call: MethodCall): Map<String, Any?> {
+        val country = call.argument<String>("country") ?: "IN"
+        val chart = when (country) {
+            "IN" -> "PL4fGSI1pDJn4pTWyM3t61lOyZ6_4jcNOw" to "Top 100 Songs India"
+            "GB" -> "PL4fGSI1pDJn6_f5P3MnzXg9l3GDfnSlXa" to "Top 100 Songs United Kingdom"
+            else -> throw IllegalArgumentException("Unsupported chart country")
+        }
+        val url = "https://www.youtube.com/playlist?list=${chart.first}"
+        val info = PlaylistInfo.getInfo(ServiceList.YouTube, url)
+        require(info.name == chart.second && info.uploaderUrl == "https://www.youtube.com/channel/UCrKZcyOJVWnJ60zM1XWllNw") { "Chart identity changed" }
+        if (info.errors.isNotEmpty()) throw ExtractionException("Chart extraction failed", info.errors.first())
+        val tracks = info.relatedItems.take(100).mapIndexed { index, item ->
+            val id = ServiceList.YouTube.streamLHFactory.getId(item.url)
+            mapOf("videoId" to id, "title" to item.name, "uploader" to item.uploaderName,
+                "uploaderUrl" to item.uploaderUrl, "rank" to index + 1,
+                "durationMs" to maxOf(0, item.duration) * 1000, "artwork" to artwork(item.thumbnails),
+                "streamable" to (item.streamType == StreamType.VIDEO_STREAM && item.contentAvailability in setOf(ContentAvailability.AVAILABLE, ContentAvailability.UNKNOWN)))
+        }
+        return mapOf("tracks" to tracks, "country" to country, "name" to info.name,
+            "ownerName" to info.uploaderName, "ownerUrl" to info.uploaderUrl, "sourceUrl" to url)
     }
     private fun collection(call: MethodCall): Map<String, Any?> {
         val url = catalogUrl(call)

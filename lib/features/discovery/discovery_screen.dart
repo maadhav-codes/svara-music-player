@@ -11,6 +11,7 @@ import '../../core/widgets/music_empty_state.dart';
 import '../library/library_screen.dart';
 import 'discovery_category.dart';
 import 'discovery_filters.dart';
+import 'ranked_discovery.dart';
 import 'artist.dart';
 import 'artist_screen.dart';
 import 'artist_favorites.dart';
@@ -23,15 +24,22 @@ class DiscoveryScreen extends ConsumerStatefulWidget {
 
 class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   final tracks = <Track>[], artists = <Artist>[];
+  final ranked = <RecordingMatch>[];
   final searchController = TextEditingController();
+  final searchFocus = FocusNode();
+  late final matcher = RankedMatcher(ref.read(youtubeProvider));
   Timer? debounce;
   CancelToken? token;
   String query = '', mode = 'Songs';
-  DiscoveryCategory? category = DiscoveryCategory.trendingToday;
+  DiscoveryCategory? category;
   DiscoveryFilters filters = const DiscoveryFilters();
+  BrowseCapabilities? capabilities;
+  RankedPage? chart;
+  DateTime? browseExpiresAt;
   String? error, continuation;
-  bool loading = false, more = true;
+  bool loading = false, more = false;
   int generation = 0;
+
   @override
   void initState() {
     super.initState();
@@ -43,7 +51,33 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     debounce?.cancel();
     token?.cancel();
     searchController.dispose();
+    searchFocus.dispose();
     super.dispose();
+  }
+
+  void searchChanged(String value) {
+    debounce?.cancel();
+    token?.cancel();
+    generation++;
+    final wasBrowsing = query.isEmpty;
+    setState(() {
+      query = value.trim();
+      if (wasBrowsing) mode = 'Songs';
+      tracks.clear();
+      artists.clear();
+      ranked.clear();
+      loading = false;
+      error = null;
+      more = false;
+    });
+    if (query.isEmpty) {
+      load(reset: true);
+    } else {
+      debounce = Timer(
+        const Duration(milliseconds: 350),
+        () => load(reset: true),
+      );
+    }
   }
 
   Future<void> load({bool reset = false}) async {
@@ -53,22 +87,82 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       generation++;
       tracks.clear();
       artists.clear();
-      more = true;
+      ranked.clear();
+      chart = null;
+      browseExpiresAt = null;
       continuation = null;
+      more = false;
     }
     final version = generation;
-    token = CancelToken();
+    final request = token = CancelToken();
     setState(() {
       loading = true;
       error = null;
     });
     try {
       final repo = ref.read(youtubeProvider);
-      if (mode == 'Artists') {
+      if (query.isEmpty) {
+        final catalog = ref.read(discoveryCatalogProvider);
+        if (!catalog.configured) return;
+        final supported =
+            capabilities ?? await catalog.capabilities(cancel: request);
+        if (!mounted || generation != version) return;
+        capabilities = supported;
+        if (supported.markets.isEmpty) {
+          throw const FormatException('No supported markets. Search above.');
+        }
+        if (!supported.markets.containsKey(filters.market)) {
+          filters = DiscoveryFilters(
+            market: supported.markets.keys.first,
+            scope: filters.scope,
+          );
+        }
+        if (supported.scopes.isNotEmpty &&
+            !supported.scopes.containsKey(filters.scope)) {
+          filters = DiscoveryFilters(
+            market: filters.market,
+            scope: supported.scopes.keys.first,
+          );
+        }
+        final page = await catalog.page(
+          market: filters.market,
+          genre: category?.id,
+          scope: filters.scope,
+          cursor: continuation,
+          cancel: request,
+        );
+        final matches = await matcher.matchPage(page, request);
+        if (!mounted || generation != version) return;
+        setState(() {
+          chart = page;
+          if (browseExpiresAt == null ||
+              page.expiresAt.isBefore(browseExpiresAt!)) {
+            browseExpiresAt = page.expiresAt;
+          }
+          final recordings = ranked.map((m) => m.recording.key).toSet();
+          final videos = ranked
+              .where((m) => m.track != null)
+              .map((m) => m.track!.id)
+              .toSet();
+          for (final match in matches) {
+            if (!recordings.add(match.recording.key)) continue;
+            ranked.add(
+              match.track != null && !videos.add(match.track!.id)
+                  ? RecordingMatch(
+                      match.recording,
+                      reason: 'Duplicate playback recording',
+                    )
+                  : match,
+            );
+          }
+          continuation = page.cursor;
+          more = continuation != null;
+        });
+      } else if (mode == 'Artists') {
         final data = await repo.catalog(
           query,
           continuation: continuation,
-          cancel: token,
+          cancel: request,
         );
         if (mounted && generation == version) {
           setState(() {
@@ -80,10 +174,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         }
       } else {
         final data = await repo.search(
-          query.isNotEmpty ? query : category?.youtubeQuery ?? '',
+          query,
           continuation: continuation,
-          cancel: token,
-          filters: filters,
+          cancel: request,
         );
         if (mounted && generation == version) {
           setState(() {
@@ -98,223 +191,353 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       if (mounted &&
           generation == version &&
           !(e is DioException && CancelToken.isCancel(e))) {
-        setState(() => error = e.toString());
+        setState(
+          () => error = query.isEmpty
+              ? 'Could not load popular music. Please retry or search above.'
+              : e.toString(),
+        );
       }
     } finally {
       if (mounted && generation == version) setState(() => loading = false);
     }
   }
 
-  Future<void> genres() async {
-    final selected = Set<String>.of(filters.genres);
-    final value = await showModalBottomSheet<Set<String>>(
+  Future<void> preferences() async {
+    var market = filters.market;
+    var scope = filters.scope;
+    final supported = capabilities!;
+    final value = await showModalBottomSheet<DiscoveryFilters>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Match all selected genres',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final genre in DiscoveryFilters.genreOptions)
-                      FilterChip(
-                        label: Text(genre),
-                        selected: selected.contains(genre),
-                        onSelected: (on) => update(() {
-                          if (on) {
-                            selected.add(genre);
-                          } else {
-                            selected.remove(genre);
-                          }
-                        }),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Browse preferences',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  if (supported.markets.length > 1)
+                    DropdownButtonFormField<String>(
+                      key: ValueKey(market),
+                      isExpanded: true,
+                      initialValue: market,
+                      decoration: const InputDecoration(
+                        labelText: 'Chart market',
                       ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => update(selected.clear),
-                      child: const Text('Clear'),
+                      items: supported.markets.entries
+                          .map(
+                            (m) => DropdownMenuItem(
+                              value: m.key,
+                              child: Text(m.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => update(() => market = value!),
                     ),
-                    const Spacer(),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, selected),
-                      child: const Text('Apply'),
+                  if (supported.scopes.length > 1)
+                    DropdownButtonFormField<String>(
+                      key: ValueKey(scope),
+                      isExpanded: true,
+                      initialValue: scope,
+                      decoration: const InputDecoration(
+                        labelText: 'Reporting period',
+                      ),
+                      items: supported.scopes.entries
+                          .map(
+                            (m) => DropdownMenuItem(
+                              value: m.key,
+                              child: Text(m.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => update(() => scope = value!),
                     ),
-                  ],
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      supported.preferenceDescription ?? 'The chart market does not filter recording language.',
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => update(() {
+                          market = supported.markets.containsKey('in')
+                              ? 'in'
+                              : supported.markets.keys.first;
+                          scope =
+                              supported.scopes.isEmpty ||
+                                  supported.scopes.containsKey('week')
+                              ? 'week'
+                              : supported.scopes.keys.first;
+                        }),
+                        child: const Text('Reset'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(
+                          context,
+                          DiscoveryFilters(market: market, scope: scope),
+                        ),
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
     if (value != null && mounted) {
-      filters = DiscoveryFilters(
-        language: filters.language,
-        genres: Set.unmodifiable(value),
-      );
-      debounce?.cancel();
+      filters = value;
       await load(reset: true);
     }
   }
 
+  Future<void> playRanked(Track selected) async {
+    if (browseExpiresAt == null || !browseExpiresAt!.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This chart is out of date. Refresh before playing.'),
+        ),
+      );
+      return;
+    }
+    final queue = ranked.map((m) => m.track).whereType<Track>().toList();
+    await ref
+        .read(handlerProvider)
+        .setQueue(queue, index: queue.indexWhere((t) => t.id == selected.id));
+  }
+
+  String dateLabel(DateTime value) =>
+      value.toUtc().toIso8601String().substring(0, 10);
+  String periodLabel(RankedPage page) =>
+      page.periodStart == null || page.periodEnd == null
+      ? 'Period unspecified'
+      : '${dateLabel(page.periodStart!)} – ${dateLabel(page.periodEnd!.subtract(const Duration(seconds: 1)))}';
+
   @override
   Widget build(BuildContext context) {
-    final count = mode == 'Artists' ? artists.length : tracks.length;
+    final browsing = query.isEmpty;
+    final preferenceLabel =
+        capabilities?.markets.length != null && capabilities!.markets.length > 1
+        ? 'Browse preferences · ${capabilities!.markets[filters.market]}'
+        : filters.scope == 'week'
+        ? 'Browse preferences'
+        : 'Browse preferences · ${capabilities?.scopes[filters.scope] ?? filters.scope}';
     final followed = ref.watch(followedArtistsProvider).asData?.value ?? [];
+    final count = browsing
+        ? ranked.length
+        : mode == 'Artists'
+        ? artists.length
+        : tracks.length;
     return RefreshIndicator(
       onRefresh: () => load(reset: true),
-      child: ListView.builder(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 16),
-        itemCount: count + 2,
-        itemBuilder: (_, i) {
-          if (i == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: searchController,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: mode == 'Songs'
-                          ? 'Search YouTube music'
-                          : 'Search artists',
-                      suffixIcon: PopupMenuButton<String>(
-                        tooltip: 'Search type',
-                        initialValue: mode,
-                        itemBuilder: (_) => ['Songs', 'Artists']
-                            .map((s) => PopupMenuItem(value: s, child: Text(s)))
-                            .toList(),
-                        onSelected: (value) {
-                          mode = value;
-                          debounce?.cancel();
-                          load(reset: true);
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(mode),
-                        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Search songs or artists',
+                    suffixIcon: searchController.text.isEmpty
+                        ? browsing && capabilities != null
+                              ? IconButton(
+                                  tooltip: preferenceLabel,
+                                  icon: const Icon(Icons.tune_rounded),
+                                  onPressed: preferences,
+                                )
+                              : null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              searchController.clear();
+                              searchChanged('');
+                            },
+                          ),
+                  ),
+                  onChanged: searchChanged,
+                ),
+                SizedBox(height: browsing ? 16 : 12),
+                if (!browsing)
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'Songs',
+                        label: Text('Songs'),
+                        icon: Icon(Icons.music_note),
                       ),
-                    ),
-                    onChanged: (value) {
+                      ButtonSegment(
+                        value: 'Artists',
+                        label: Text('Artists'),
+                        icon: Icon(Icons.person),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (value) {
                       debounce?.cancel();
-                      token?.cancel();
-                      generation++;
-                      query = value.trim();
-                      category = query.isEmpty
-                          ? DiscoveryCategory.trendingToday
-                          : null;
-                      setState(() {
-                        loading = false;
-                        tracks.clear();
-                        artists.clear();
-                        error = null;
-                        more = false;
-                      });
-                      debounce = Timer(
-                        const Duration(milliseconds: 350),
-                        () => load(reset: true),
-                      );
+                      mode = value.single;
+                      load(reset: true);
                     },
                   ),
-                  if (mode == 'Songs')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: PopupMenuButton<String>(
-                            tooltip: 'Language',
-                            itemBuilder: (_) => DiscoveryFilters.languages
-                                .map(
-                                  (l) => PopupMenuItem(
-                                    value: l,
-                                    child: Text(l.isEmpty ? 'Any language' : l),
+                if (browsing) ...[
+                  if (!ref.watch(discoveryCatalogProvider).configured) ...[
+                    Text(
+                      'Browse music',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Popular music and genre collections are not available yet. Search for a song or artist above.',
+                    ),
+                  ] else ...[
+                    if (category != null)
+                      TextButton.icon(
+                        onPressed: () {
+                          category = null;
+                          load(reset: true);
+                        },
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('All popular music'),
+                      ),
+                    Text(
+                      category == null
+                          ? capabilities == null
+                                ? 'Popular music'
+                                : capabilities!.browseTitle == null
+                                ? 'Popular in ${capabilities!.markets[filters.market]}'
+                                : '${capabilities!.browseTitle}${capabilities!.markets.length > 1 ? ' in ${capabilities!.markets[filters.market]}' : ''}'
+                          : '${category!.label} · ${capabilities?.markets[filters.market] ?? filters.market.toUpperCase()}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    if (chart != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              chart!.sourceName.startsWith('YouTube Charts')
+                                  ? '${chart!.sourceName} · Fetched ${chart!.fetchedAt.toLocal().toIso8601String().substring(0, 10)} ${chart!.fetchedAt.toLocal().toIso8601String().substring(11, 16)}'
+                                  : '${chart!.sourceName} · ${capabilities?.scopes[chart!.scope] ?? 'Most played'} · ${periodLabel(chart!)} · Updated ${chart!.updatedAt == null ? 'unknown' : dateLabel(chart!.updatedAt!)}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                   ),
-                                )
-                                .toList(),
-                            onSelected: (value) {
-                              filters = DiscoveryFilters(
-                                language: value,
-                                genres: filters.genres,
-                              );
-                              debounce?.cancel();
-                              load(reset: true);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                '${filters.language.isEmpty ? 'Language' : filters.language} ▾',
-                              ),
                             ),
                           ),
-                        ),
-                        TextButton.icon(
-                          onPressed: genres,
-                          icon: const Icon(Icons.tune, size: 18),
-                          label: Text(
-                            filters.genres.isEmpty
-                                ? 'Genres'
-                                : filters.genres.join(' + '),
-                          ),
-                        ),
-                      ],
-                    ),
-                  if (mode == 'Songs' && filters.active)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        'Matches all selected labels in title/channel metadata. Unlabeled recordings are omitted.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  if (query.isEmpty && mode == 'Songs')
-                    SingleChildScrollView(
-                      key: const ValueKey('discovery-categories'),
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final choice in DiscoveryCategory.values)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 6),
-                              child: ChoiceChip(
-                                label: Text(choice.label),
-                                selected: category == choice,
-                                onSelected: (selected) {
-                                  debounce?.cancel();
-                                  category = selected
-                                      ? choice
-                                      : DiscoveryCategory.trendingToday;
-                                  load(reset: true);
-                                },
+                          if (chart!.chartUrl != null)
+                            IconButton(
+                              icon: const Icon(Icons.open_in_new, size: 16),
+                              tooltip: 'Chart source',
+                              constraints: const BoxConstraints(
+                                minWidth: 48,
+                                minHeight: 48,
                               ),
+                              onPressed: () async {
+                                try {
+                                  await ref
+                                      .read(libraryRepositoryProvider)
+                                      .openUrl(chart!.chartUrl!);
+                                } catch (_) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'A browser is needed to open the chart source.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
                             ),
                         ],
                       ),
-                    ),
-                  if (query.isEmpty && mode == 'Songs')
-                    Text(
-                      'Suggested music search on YouTube',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    ],
+                    const SizedBox(height: 8),
+                    if (category == null &&
+                        capabilities != null &&
+                        capabilities!.genres.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Browse genres',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      LayoutBuilder(
+                        builder: (context, constraints) => Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final genre in capabilities!.genres)
+                              SizedBox(
+                                width: (constraints.maxWidth - 8) / 2,
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    category = genre;
+                                    load(reset: true);
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    child: Text(genre.label),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
+              ],
+            ),
+          ),
+          if (browsing)
+            for (final match in ranked)
+              if (match.track != null)
+                SongTile(match.track!, onPlay: () => playRanked(match.track!))
+              else
+                ListTile(
+                  enabled: false,
+                  leading: Text('${match.recording.rank}'),
+                  title: Text(match.recording.title),
+                  subtitle: Text(
+                    '${match.recording.artists.isEmpty ? 'YouTube' : match.recording.artists.join(', ')} · ${match.reason}',
+                  ),
+                ),
+          if (!browsing && mode == 'Songs')
+            for (var i = 0; i < tracks.length; i++)
+              SongTile(
+                tracks[i],
+                onPlay: () =>
+                    ref.read(handlerProvider).setQueue(tracks, index: i),
               ),
-            );
-          }
-          if (i <= count) {
-            if (mode == 'Artists') {
-              final artist = artists[i - 1];
-              return ListTile(
+          if (!browsing && mode == 'Artists')
+            for (final artist in artists)
+              ListTile(
                 leading: CatalogArtwork(artist.artwork),
                 title: Text(artist.name),
                 subtitle: Text(
@@ -333,16 +556,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   context,
                   AppPageRoute(builder: (_) => ArtistScreen(artist)),
                 ),
-              );
-            }
-            final track = tracks[i - 1];
-            return SongTile(
-              track,
-              onPlay: () =>
-                  ref.read(handlerProvider).setQueue(tracks, index: i - 1),
-            );
-          }
-          return Padding(
+              ),
+          Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
@@ -353,26 +568,24 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                     onPressed: () => load(reset: true),
                     child: const Text('Retry'),
                   ),
-                if (!loading && error == null && count == 0)
+                if (!loading &&
+                    error == null &&
+                    count == 0 &&
+                    (!browsing ||
+                        ref.read(discoveryCatalogProvider).configured))
                   MusicEmptyState(
-                    title: mode == 'Artists'
-                        ? 'Search for an artist'
-                        : query.isNotEmpty
-                        ? 'No songs found'
-                        : 'Find your next sound',
-                    message: filters.active && mode == 'Songs'
-                        ? 'No results carry all selected labels. Change the filters or load another page.'
-                        : 'Try another search or explore trending music.',
-                    actionLabel: 'Explore trending music',
+                    title: browsing
+                        ? 'No popular music available'
+                        : mode == 'Artists'
+                        ? 'No artists found'
+                        : 'No songs found',
+                    message:
+                        'Try another song or artist in the search field above.',
+                    actionLabel: 'Clear search',
                     icon: Icons.search_rounded,
                     onAction: () {
-                      debounce?.cancel();
                       searchController.clear();
-                      query = '';
-                      mode = 'Songs';
-                      filters = const DiscoveryFilters();
-                      category = DiscoveryCategory.trendingToday;
-                      load(reset: true);
+                      searchChanged('');
                     },
                   ),
                 if (more && !loading && error == null)
@@ -382,8 +595,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   ),
               ],
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

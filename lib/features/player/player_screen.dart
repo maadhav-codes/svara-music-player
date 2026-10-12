@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/track.dart';
-import '../../core/media_source.dart';
 import '../../core/artwork.dart';
 import '../library/library_screen.dart';
 import '../playlists/playlists_screen.dart';
@@ -93,93 +92,138 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
         if (t == null) return const SizedBox();
         return Material(
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          child: GestureDetector(
-            excludeFromSemantics: true,
-            behavior: HitTestBehavior.opaque,
-            onPanDown: (details) {
-              _dragStart = details.localPosition;
-              _setDrag(Offset.zero);
-            },
-            onPanStart: (details) =>
-                _setDrag(details.localPosition - _dragStart),
-            onPanUpdate: (details) =>
-                _setDrag(details.localPosition - _dragStart),
-            onPanCancel: () => _setDrag(Offset.zero),
-            onPanEnd: (details) => _finishSwipe(details, h),
-            child: Listener(
-              onPointerCancel: (_) => _setDrag(Offset.zero),
-              child: InkWell(
-                onTap: _expand,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ClipRect(
-                          child: ValueListenableBuilder<double>(
-                            valueListenable: _slide,
-                            child: Row(
-                              children: [
-                                TrackArt(t, size: 48),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        t.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
+          elevation: 2,
+          shadowColor: Theme.of(context).colorScheme.shadow
+              .withValues(alpha: .16),
+          child: Stack(
+            children: [
+              GestureDetector(
+                excludeFromSemantics: true,
+                behavior: HitTestBehavior.opaque,
+                onPanDown: (details) {
+                  _dragStart = details.localPosition;
+                  _setDrag(Offset.zero);
+                },
+                onPanStart: (details) =>
+                    _setDrag(details.localPosition - _dragStart),
+                onPanUpdate: (details) =>
+                    _setDrag(details.localPosition - _dragStart),
+                onPanCancel: () => _setDrag(Offset.zero),
+                onPanEnd: (details) => _finishSwipe(details, h),
+                child: Listener(
+                  onPointerCancel: (_) => _setDrag(Offset.zero),
+                  child: InkWell(
+                    onTap: _expand,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ClipRect(
+                              child: ValueListenableBuilder<double>(
+                                valueListenable: _slide,
+                                child: Row(
+                                  children: [
+                                    TrackArt(t, size: 48),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            t.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          Text(
+                                            t.recordingArtist,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                builder: (context, value, child) {
+                                  final media = MediaQuery.of(context);
+                                  final reduced =
+                                      media.disableAnimations ||
+                                      media.accessibleNavigation;
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween(end: reduced ? 0 : value),
+                                    duration: reduced || _drag != Offset.zero
+                                        ? Duration.zero
+                                        : const Duration(milliseconds: 160),
+                                    curve: Curves.easeOut,
+                                    builder: (_, x, child) =>
+                                        Transform.translate(
+                                          offset: Offset(x, 0),
+                                          child: child,
                                         ),
-                                      ),
-                                      Text(
-                                        t.artist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                    child: child,
+                                  );
+                                },
+                              ),
                             ),
-                            builder: (context, value, child) {
-                              final media = MediaQuery.of(context);
-                              final reduced =
-                                  media.disableAnimations ||
-                                  media.accessibleNavigation;
-                              return TweenAnimationBuilder<double>(
-                                tween: Tween(end: reduced ? 0 : value),
-                                duration: reduced || _drag != Offset.zero
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 160),
-                                curve: Curves.easeOut,
-                                builder: (_, x, child) => Transform.translate(
-                                  offset: Offset(x, 0),
-                                  child: child,
-                                ),
-                                child: child,
-                              );
-                            },
                           ),
-                        ),
+                          PlayButton(h),
+                          IconButton(
+                            tooltip: 'Next track',
+                            onPressed: h.skipToNext,
+                            icon: const Icon(Icons.skip_next_rounded),
+                          ),
+                        ],
                       ),
-                      PlayButton(h),
-                      IconButton(
-                        tooltip: 'Next track',
-                        onPressed: h.skipToNext,
-                        icon: const Icon(Icons.skip_next_rounded),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: ExcludeSemantics(
+                  child: StreamBuilder<Duration?>(
+                    key: ValueKey(t.id),
+                    stream: h.player.durationStream,
+                    builder: (_, durationSnapshot) => StreamBuilder<Duration>(
+                      stream: h.player.positionStream,
+                      builder: (_, positionSnapshot) {
+                        final reportedDuration = durationSnapshot.data;
+                        final duration =
+                            reportedDuration != null &&
+                                reportedDuration > Duration.zero
+                            ? reportedDuration
+                            : Duration(milliseconds: t.durationMs);
+                        final position = h.position;
+                        final total = duration.inMilliseconds;
+                        return LinearProgressIndicator(
+                          value: total > 0
+                              ? (position.inMilliseconds / total).clamp(
+                                  0.0,
+                                  1.0,
+                                )
+                              : 0,
+                          minHeight: 2,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .outlineVariant
+                              .withValues(alpha: .3),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -354,7 +398,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  t.artist,
+                                  t.recordingArtist,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.center,
@@ -362,45 +406,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                       .textTheme
                                       .titleMedium,
                                 ),
-                                if (t.online)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      'STREAMING FROM ${t.source.label.toUpperCase()}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        letterSpacing: 2,
-                                      ),
-                                    ),
-                                  ),
-                                if (t.source == MediaSource.youtube)
-                                  TextButton.icon(
-                                    icon: const Icon(
-                                      Icons.open_in_new,
-                                      size: 18,
-                                    ),
-                                    label: const Text('Open video in YouTube'),
-                                    onPressed: () async {
-                                      try {
-                                        await ref
-                                            .read(libraryRepositoryProvider)
-                                            .openUrl(t.sourceUrl);
-                                      } catch (_) {
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'A browser or YouTube app is needed to open this video.',
-                                                  ),
-                                                ),
-                                              );
-                                        }
-                                      }
-                                    },
-                                  ),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -460,6 +465,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                       onPressed: () =>
                                           addToPlaylist(context, ref, t),
                                       icon: const Icon(Icons.playlist_add),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Song options',
+                                      onPressed: () =>
+                                          showTrackOptions(context, ref, t),
+                                      icon: const Icon(Icons.more_vert),
                                     ),
                                   ],
                                 ),

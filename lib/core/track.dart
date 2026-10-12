@@ -6,6 +6,9 @@ class Track {
     required this.title,
     required this.artist,
     required this.uri,
+    this.catalog,
+    this.uploaderUrl,
+    this.musicCatalogSong = false,
     this.album = '',
     this.folder = '',
     this.durationMs = 0,
@@ -16,8 +19,16 @@ class Track {
     // Keep the public source argument while inferring legacy ID-only records.
     // ignore: prefer_initializing_formals
   }) : _source = source;
+
+  /// Provider evidence stays separate from canonical YouTube title/uploader.
+  final Map<String, dynamic>? catalog;
+  String get recordingArtist =>
+      catalog == null || (catalog!['artists'] as List).isEmpty
+      ? artist
+      : (catalog!['artists'] as List).join(', ');
   final String id, title, artist, uri, album, folder;
-  final String? artwork;
+  final String? artwork, uploaderUrl;
+  final bool musicCatalogSong;
   final int durationMs, modified;
   final bool streamable;
   final MediaSource? _source;
@@ -31,6 +42,9 @@ class Track {
     MediaSource.local => uri,
   };
   Map<String, Object?> toJson() => {
+    if (catalog != null) 'catalog': catalog,
+    if (uploaderUrl != null) 'uploaderUrl': uploaderUrl,
+    if (musicCatalogSong) 'musicCatalogSong': true,
     'id': id,
     'title': title,
     'artist': artist,
@@ -46,6 +60,9 @@ class Track {
   // Online selections persist identifiers, never signed URLs or API credentials.
   Map<String, Object?> toSavedJson() => online
       ? {
+          if (catalog != null) 'catalog': catalog,
+          if (uploaderUrl != null) 'uploaderUrl': uploaderUrl,
+          if (musicCatalogSong) 'musicCatalogSong': true,
           'id': id,
           'title': title,
           'artist': artist,
@@ -56,6 +73,11 @@ class Track {
         }
       : toJson();
   factory Track.fromJson(Map<String, dynamic> j) => Track(
+    catalog: j['catalog'] == null
+        ? null
+        : Map<String, dynamic>.from(j['catalog'] as Map),
+    uploaderUrl: j['uploaderUrl'] as String?,
+    musicCatalogSong: j['musicCatalogSong'] == true,
     id: j['id'] as String,
     title: j['title'] as String,
     artist: j['artist'] as String,

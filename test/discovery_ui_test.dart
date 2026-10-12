@@ -1,3 +1,4 @@
+import 'package:svara/features/discovery/ranked_discovery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,6 +55,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              discoveryCatalogProvider.overrideWithValue(DiscoveryCatalog()),
               storeProvider.overrideWithValue(store),
               youtubeProvider.overrideWithValue(youtube),
             ],
@@ -62,19 +64,20 @@ void main() {
         );
         await settle();
         expect(find.byType(SegmentedButton), findsNothing);
-        expect(calls, 1);
+        expect(calls, 0);
         await tester.enterText(find.byType(TextField), 'music');
         await tester.pump(const Duration(milliseconds: 200));
-        expect(calls, 1);
+        expect(calls, 0);
         await tester.pump(const Duration(milliseconds: 200));
         await settle();
-        expect(calls, 2);
+        expect(calls, 1);
+        expect(find.byType(SegmentedButton<String>), findsOneWidget);
         expect(find.text('First result'), findsOneWidget);
         expect(find.textContaining('Test channel • YouTube'), findsOneWidget);
         await tester.ensureVisible(find.text('Load more'));
         await tester.tap(find.text('Load more'));
         await settle();
-        expect(calls, 3);
+        expect(calls, 2);
         expect(find.text('Second result'), findsOneWidget);
         await tester.ensureVisible(find.byTooltip('Song options').first);
         await tester.tap(find.byTooltip('Song options').first);

@@ -77,7 +77,7 @@ class _HomeState extends ConsumerState<Home> {
       actions: [
         IconButton(
           tooltip: 'Settings',
-          icon: const Icon(Icons.tune_rounded),
+          icon: const Icon(Icons.settings_outlined),
           onPressed: () => Navigator.push(
             context,
             AppPageRoute<void>(builder: (_) => const SettingsScreen()),

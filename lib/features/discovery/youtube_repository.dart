@@ -11,7 +11,6 @@ import '../../core/track.dart';
 import '../../core/resolved_track.dart';
 import '../../core/memory_cache.dart';
 import 'artist.dart';
-import 'discovery_filters.dart';
 
 class YouTubePage {
   const YouTubePage(this.tracks, this.continuation);
@@ -172,34 +171,18 @@ class YouTubeRepository {
     r'\b(music|songs?|audio|ost|soundtracks?|tracks?|lyrics?|instrumental|remix|mix(?:es)?|albums?|compilation|concert|dj|score)\b',
     caseSensitive: false,
   );
-  static final _preferredUploader = RegExp(
-    r'(?:-\s*topic|vevo)\s*$',
-    caseSensitive: false,
-  );
-  static final _officialAudio = RegExp(
-    r'\bofficial\s+audio\b',
-    caseSensitive: false,
-  );
-
   String _musicQuery(String query) =>
       _musicTerms.hasMatch(query) || query.length > 294
       ? query
       : '$query music';
 
-  int _musicPriority(Track track) => _preferredUploader.hasMatch(track.artist)
-      ? 0
-      : _officialAudio.hasMatch(track.title)
-      ? 1
-      : 2;
-
   Future<YouTubePage> search(
     String query, {
     String? continuation,
     CancelToken? cancel,
-    DiscoveryFilters filters = const DiscoveryFilters(),
     Artist? artist,
   }) async {
-    query = filters.query(query.trim());
+    query = query.trim();
     if (query.isEmpty) return const YouTubePage([], null);
     if (query.length > 300) {
       throw const SourceException(
@@ -233,13 +216,8 @@ class YouTubeRepository {
               ),
         )
         .map((t) => _track(Map<String, dynamic>.from(t as Map)))
-        .where((track) => filters.matches(track.title, track.artist))
         .toList();
-    // Stable preference: preserve upstream relevance within each tier.
-    return YouTubePage([
-      for (var priority = 0; priority < 3; priority++)
-        ...tracks.where((track) => _musicPriority(track) == priority),
-    ], data['continuation'] as String?);
+    return YouTubePage(tracks, data['continuation'] as String?);
   }
 
   bool _artistMatches(Artist artist, String name, String? url) {
@@ -299,6 +277,13 @@ class YouTubeRepository {
       Artist.fromJson(
         await _call('artist', {'url': artist.url}, cancel: cancel),
       );
+
+  Future<Map<String, dynamic>> musicCharts(
+    String country, {
+    CancelToken? cancel,
+  }) => _call('musicCharts', {'country': country}, cancel: cancel);
+
+  Track chartTrack(Map<String, dynamic> json) => _track(json);
 
   Future<YouTubePage> collection(
     MusicCollection collection, {
@@ -362,7 +347,10 @@ class YouTubeRepository {
       );
     }
     return ResolvedTrack(
-      _track(Map<String, dynamic>.from(data['track'] as Map)),
+      Track.fromJson({
+        ..._track(Map<String, dynamic>.from(data['track'] as Map)).toJson(),
+        if (reference.catalog != null) 'catalog': reference.catalog,
+      }),
       stream,
     );
   }
@@ -376,6 +364,8 @@ class YouTubeRepository {
       );
     }
     return Track(
+      uploaderUrl: j['uploaderUrl'] as String?,
+      musicCatalogSong: j['musicCatalogSong'] == true,
       id: 'youtube:$id',
       title: j['title'] as String? ?? 'YouTube video',
       artist: j['uploader'] as String? ?? 'Unknown uploader',

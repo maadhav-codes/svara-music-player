@@ -1,3 +1,4 @@
+import 'package:svara/features/discovery/ranked_discovery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -93,6 +94,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              discoveryCatalogProvider.overrideWithValue(DiscoveryCatalog()),
               storeProvider.overrideWithValue(store),
               handlerProvider.overrideWithValue(handler),
             ],

@@ -146,21 +146,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     },
                   ),
                   const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: tracks.isEmpty
-                        ? null
-                        : () async {
-                            final history = await ref
-                                .read(storeProvider)
-                                .history();
-                            await ref
-                                .read(handlerProvider)
-                                .setQueue(quickMix(tracks, favorites, history));
-                          },
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Quick Mix'),
-                  ),
-                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Expanded(child: Text(group ?? '${tracks.length} tracks')),
@@ -169,6 +154,32 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                           onPressed: () => setState(() => group = null),
                           child: const Text('All groups'),
                         ),
+                      PopupMenuButton<String>(
+                        tooltip: 'Library options',
+                        icon: const Icon(Icons.more_vert),
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'mix',
+                            enabled: tracks.isNotEmpty,
+                            child: const ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('Mix my library'),
+                              subtitle: Text(
+                                'Mix favorites with songs you haven’t played recently.',
+                              ),
+                            ),
+                          ),
+                        ],
+                        onSelected: (_) async {
+                          final history = await ref
+                              .read(storeProvider)
+                              .history();
+                          if (!mounted) return;
+                          await ref
+                              .read(handlerProvider)
+                              .setQueue(quickMix(tracks, favorites, history));
+                        },
+                      ),
                       PopupMenuButton<String>(
                         tooltip: 'Sort songs',
                         onSelected: (value) => setState(() => sort = value),
@@ -234,7 +245,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: PersonalizedFeed()),
+          if (query.trim().isEmpty && filter == 'All' && group == null)
+            const SliverToBoxAdapter(child: PersonalizedFeed()),
           if (!allowed && !loading)
             SliverFillRemaining(
               hasScrollBody: false,
@@ -277,8 +289,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       ? 'No songs found'
                       : 'A little quiet here',
                   message: query.isNotEmpty
-                      ? 'Try another search or explore trending music in Discover.'
-                      : 'Add music to your phone or explore trending music in Discover.',
+                      ? 'Try another search or search online music in Discover.'
+                      : 'Add music to your phone or search online music in Discover.',
                   actionLabel: widget.onDiscover != null
                       ? 'Explore Discover'
                       : 'Refresh music',
@@ -398,11 +410,11 @@ class SongTile extends ConsumerWidget {
   final String? removeLabel;
   @override
   Widget build(BuildContext context, WidgetRef ref) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     leading: TrackArt(track, size: 44),
     title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: Text(
-      '${track.artist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
+      '${track.recordingArtist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     ),
@@ -417,6 +429,7 @@ class SongTile extends ConsumerWidget {
           ),
     trailing: IconButton(
       tooltip: 'Song options',
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       icon: const Icon(Icons.more_vert),
       onPressed: () => showTrackOptions(
         context,
@@ -533,7 +546,22 @@ Future<void> showTrackOptions(
                 const SizedBox(height: 16),
                 for (final detail in [
                   ('Title', track.title),
-                  ('Artist', track.artist),
+                  (track.online ? 'YouTube uploader' : 'Artist', track.artist),
+                  if (track.catalog != null) ...[
+                    (
+                      'Recording artist',
+                      (track.catalog!['artists'] as List).isEmpty
+                          ? 'Unknown'
+                          : (track.catalog!['artists'] as List).join(', '),
+                    ),
+                    ('Catalog source', track.catalog!['sourceName'] as String),
+                    ('Catalog URL', track.catalog!['sourceUrl'] as String),
+                    if (track.catalog!['metadataUrl'] != null)
+                      (
+                        'MusicBrainz recording',
+                        track.catalog!['metadataUrl'] as String,
+                      ),
+                  ],
                   ('Album', track.album.isEmpty ? 'Unknown' : track.album),
                   (
                     'Duration',
@@ -560,6 +588,28 @@ Future<void> showTrackOptions(
                   SelectableText(detail.$2),
                   const SizedBox(height: 12),
                 ],
+                if (track.online)
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Open in YouTube'),
+                    onPressed: () async {
+                      try {
+                        await ref
+                            .read(libraryRepositoryProvider)
+                            .openUrl(track.sourceUrl);
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'A browser or YouTube app is needed to open this song.',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
               ],
             ),
           ),

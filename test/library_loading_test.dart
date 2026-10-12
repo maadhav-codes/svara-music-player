@@ -47,7 +47,7 @@ void main() {
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfiNoIsolate;
   testWidgets(
-    'all tracks load once; search, sorting, filters and Quick Mix do not reload',
+    'all tracks load once; search, sorting, filters and library mix do not reload',
     (tester) async {
       late Store store;
       late SvaraHandler handler;
@@ -108,7 +108,10 @@ void main() {
         expect(find.text('Artist'), findsOneWidget);
         await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Quick Mix'));
+        expect(find.text('Quick Mix'), findsNothing);
+        await tester.tap(find.byTooltip('Library options'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Mix my library'));
         await settle();
         expect(handler.tracks, hasLength(50));
         expect(repo.reads, 2);
