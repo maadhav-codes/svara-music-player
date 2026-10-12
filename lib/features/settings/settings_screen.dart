@@ -172,7 +172,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 await ref
                     .read(libraryRepositoryProvider)
                     .openUrl('mailto:mayurdayal.engineer@gmail.com');
-              } catch (_) {}
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not open an email app. Contact mayurdayal.engineer@gmail.com.',
+                      ),
+                    ),
+                  );
+                }
+              }
             },
           ),
           ListTile(

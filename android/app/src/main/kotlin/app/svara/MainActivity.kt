@@ -61,9 +61,12 @@ class MainActivity : AudioServiceActivity() {
                 "openSettings" -> { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))); result.success(null) }
                 "openUrl" -> {
                     val uri = Uri.parse(call.argument<String>("url"))
-                    if (uri.scheme == "https" && uri.host in setOf("audius.co", "audius.org", "www.youtube.com", "youtube.com", "policies.google.com")) {
-                        try { startActivity(Intent(Intent.ACTION_VIEW, uri)); result.success(null) }
-                        catch (e: Exception) { result.error("browser", "No browser available.", null) }
+                    val isWeb = uri.scheme in setOf("https", "http") && !uri.host.isNullOrBlank()
+                    val isEmail = uri.scheme == "mailto" && !uri.schemeSpecificPart.isNullOrBlank()
+                    if (isWeb || isEmail) {
+                        val action = if (isEmail) Intent.ACTION_SENDTO else Intent.ACTION_VIEW
+                        try { startActivity(Intent(action, uri)); result.success(null) }
+                        catch (_: Exception) { result.error("launcher", "No app available to open this link.", null) }
                     } else result.error("url", "Unsupported URL", null)
                 }
                 "scan" -> {

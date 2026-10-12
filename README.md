@@ -4,12 +4,12 @@ An Android music player for your phone’s music, with Audius streaming and expe
 
 Svara (स्वर) means “musical note” or “voice.” The app has no ads, required accounts, subscriptions, or analytics. Local playback works offline; discovery and online lyrics require an internet connection.
 
-| Library · Light | Library · Dark |
-| :---: | :---: |
+|                                         Library · Light                                          |                                            Library · Dark                                            |
+| :----------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------: |
 | <img src="docs/library-preview.png" width="300" alt="Svara local music library in light mode" /> | <img src="docs/library-preview-dark.png" width="300" alt="Svara local music library in dark mode" /> |
 
-| Now playing · Light | Now playing · Dark |
-| :---: | :---: |
+|                                      Now playing · Light                                      |                                        Now playing · Dark                                         |
+| :-------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------: |
 | <img src="docs/player-preview.png" width="300" alt="Svara full music player in light mode" /> | <img src="docs/player-preview-dark.png" width="300" alt="Svara full music player in dark mode" /> |
 
 ## Start here
@@ -257,6 +257,8 @@ flutter build apk --release --split-per-abi
 
 Build outputs are in `build/app/outputs/flutter-apk/`:
 
+Keep generated APKs in the ignored build output directory. Local distribution APKs and checksum files are not kept in the workspace; `dist/` remains ignored. Flutter also generates the ignored Android `GeneratedPluginRegistrant.java`; it is not a second app implementation.
+
 | Build             | Filename                                                                             |
 | ----------------- | ------------------------------------------------------------------------------------ |
 | Debug             | `app-debug.apk`                                                                      |
@@ -269,14 +271,29 @@ Install a universal release on a connected test device with Android SDK’s `adb
 adb -s DEVICE_ID install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-**Release signing is not configured for production.** `android/app/build.gradle.kts` currently signs release builds with the local debug key. Release mode enables minification and resource shrinking, but does not change that signing arrangement.
+Release signing accepts `android/key.properties` for local builds:
+
+```properties
+storeFile=/absolute/path/to/svara-release.jks
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+keyPassword=YOUR_KEY_PASSWORD
+```
+
+The file and keystore are ignored by Git. All four values are required together.
+Without signing configuration, local release builds use the debug key for
+testing. Configure a production signing key before public distribution.
+Release mode enables minification and resource shrinking.
+
+Builds, checks, and release publishing are currently manual. CI/CD and GitHub
+Actions workflows are not configured; automation will be added later.
 
 Before public distribution:
 
-1. Configure a production keystore and release signing in `android/app/build.gradle.kts`. Keep the keystore and passwords outside version control, and preserve the key for future updates.
+1. Configure `android/key.properties` with a production keystore. Keep the keystore and passwords outside version control, and preserve the key for future updates.
 2. Update `version` in `pubspec.yaml` (`versionName+versionCode`) and the displayed version in `lib/features/settings/settings_screen.dart`. Use a higher build number for upgrades; `--build-number=NUMBER` can override it during a build.
 3. Run the checks above, the relevant Android smoke tests, and a minified release build. Confirm local playback, permissions, playlists, notification controls, and lyrics on a device.
-4. Ship corresponding app/plugin source, build instructions, and third-party notices with the distribution.
+4. Manually upload distribution APKs and their SHA-256 checksums to GitHub Releases. Ship corresponding app/plugin source, build instructions, and third-party notices with the distribution.
 
 When updating NewPipeExtractor, review and pin the new version, update `assets/licenses/NOTICE.txt`, and verify native tests, live playback, and release shrinking. Preserve the plugin’s Rhino consumer R8 rules and NIO desugaring in both the app and plugin. The Gradle compatibility flags `android.builtInKotlin=false` and `android.newDsl=false` are currently enabled; revisit them when migrating the Android/Flutter toolchain.
 
@@ -296,6 +313,11 @@ When updating NewPipeExtractor, review and pin the new version, update `assets/l
 ## License and credits
 
 Svara is **GPL-3.0-or-later**. See [LICENSE](LICENSE) and [native dependency notices](assets/licenses/NOTICE.txt). Third-party notices are also available in **Settings → Open-source licenses**.
+
+Flutter collects Dart package licenses automatically. `lib/core/licenses.dart`
+adds the bundled notices for native Gradle dependencies, including the local
+NewPipeExtractor plugin and Android desugaring libraries. Keep those notices
+alongside the corresponding native dependencies when changing the build.
 
 Music and lyrics come from their respective providers; their availability and permitted use depend on the provider and rights holder. Software licenses do not grant rights to recordings or override provider terms. The experimental YouTube integration is not an official YouTube client.
 
