@@ -8,6 +8,7 @@ import '../../core/track.dart';
 import '../../core/artwork.dart';
 import '../../core/widgets/music_empty_state.dart';
 import '../playlists/playlists_screen.dart';
+import '../discovery/personalized_feed.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({this.onDiscover, super.key});
@@ -130,27 +131,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Your music.\nYour moment.',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      height: 1.15,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'ON YOUR PHONE',
-                    style: TextStyle(
-                      letterSpacing: 2,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
                   TextField(
                     controller: searchController,
                     decoration: const InputDecoration(
@@ -161,7 +145,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       setState(() => query = value);
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   FilledButton.icon(
                     onPressed: tracks.isEmpty
                         ? null
@@ -176,7 +160,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     icon: const Icon(Icons.auto_awesome),
                     label: const Text('Quick Mix'),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Expanded(child: Text(group ?? '${tracks.length} tracks')),
@@ -250,6 +234,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               ),
             ),
           ),
+          const SliverToBoxAdapter(child: PersonalizedFeed()),
           if (!allowed && !loading)
             SliverFillRemaining(
               hasScrollBody: false,
@@ -413,8 +398,8 @@ class SongTile extends ConsumerWidget {
   final String? removeLabel;
   @override
   Widget build(BuildContext context, WidgetRef ref) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-    leading: TrackArt(track),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+    leading: TrackArt(track, size: 44),
     title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: Text(
       '${track.artist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
@@ -462,7 +447,7 @@ Future<void> showTrackOptions(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: TrackArt(track),
+              leading: TrackArt(track, size: 44),
               title: Text(track.title),
               subtitle: Text(track.artist),
             ),

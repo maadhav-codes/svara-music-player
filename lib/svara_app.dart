@@ -1,3 +1,5 @@
+import 'core/app_routes.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -78,7 +80,7 @@ class _HomeState extends ConsumerState<Home> {
           icon: const Icon(Icons.tune_rounded),
           onPressed: () => Navigator.push(
             context,
-            MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            AppPageRoute<void>(builder: (_) => const SettingsScreen()),
           ),
         ),
       ],

@@ -1,3 +1,5 @@
+import '../../core/app_routes.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -132,17 +134,10 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
       child: ListView(
         children: [
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Keep a feeling.',
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                const Text('Personal playlists, saved on your phone.'),
-                const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: createPlaylist,
                   icon: const Icon(Icons.add),
@@ -153,8 +148,8 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
           ),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 8,
+              horizontal: 16,
+              vertical: 2,
             ),
             leading: const Icon(Icons.favorite, size: 36),
             title: const Text('Favorites'),
@@ -173,7 +168,7 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
               ref.invalidate(favoriteTracksProvider);
               Navigator.push(
                 context,
-                MaterialPageRoute<void>(
+                AppPageRoute<void>(
                   builder: (_) => FavoritesScreen(onLibrary: widget.onLibrary),
                 ),
               );
@@ -194,8 +189,8 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
           ...lists.map(
             (p) => ListTile(
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 8,
+                horizontal: 16,
+                vertical: 2,
               ),
               leading: const Icon(Icons.queue_music, size: 36),
               title: Text(p.name),
@@ -203,7 +198,7 @@ class _PlaylistsScreenState extends ConsumerState<PlaylistsScreen> {
               onTap: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute<void>(
+                  AppPageRoute<void>(
                     builder: (_) =>
                         PlaylistDetail(p, onLibrary: widget.onLibrary),
                   ),

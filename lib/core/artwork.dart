@@ -89,7 +89,7 @@ class _TrackArtState extends ConsumerState<TrackArt> {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(10),
     child: SizedBox(
       width: widget.size,
       height: widget.size,

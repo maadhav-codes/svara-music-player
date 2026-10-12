@@ -26,6 +26,7 @@ doc/api/
 
 # Android Build & Local Configuration
 android/.gradle/
+android/.kotlin/
 .gradle/
 android/local.properties
 android/captures/

@@ -146,7 +146,7 @@ void main() {
       await tester.pumpAndSettle();
       // The artwork supports an upward swipe in addition to the icon.
       await tester.fling(
-        find.byType(ClipOval).first,
+        find.byKey(const ValueKey('player-artwork')),
         const Offset(0, -100),
         700,
       );

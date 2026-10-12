@@ -24,13 +24,14 @@ Svara (स्वर) means “musical note” or “voice.” The app has no ads
 - Finds audio indexed by Android’s MediaStore and browses it by album, artist, or folder, with search and a recently played filter.
 - Plays local audio through Android’s supported decoders. Common formats include MP3, AAC/M4A, FLAC, WAV, and OGG; compatibility depends on the device and file encoding.
 - Offers **Quick Mix**, combining local favorites with less recently played local tracks.
-- Searches and streams YouTube music results.
+- Searches and streams YouTube music results, with language and combined genre filters.
+- Searches artist profiles, follows artists locally, and recommends their tracks, albums, and radio playlists on the Library home screen.
 - Saves playlists and supports Play Next, Add to Queue, queue reordering, shuffle, and repeat.
 - Supports background playback, media notification controls, audio interruption handling, and pausing when headphones disconnect.
 - Displays synchronized lyrics, plain-text lyrics, and local `.lrc` files.
 - Includes light, dark, and system themes, plus a 15-, 30-, 45-, or 60-minute sleep timer.
 
-**Current scope:** Android only. The repository does not include iOS, web, or desktop app targets, a home-screen widget, or an offline download feature for online music. Light mode uses warm ivory surfaces and burnt-orange accents; dark mode uses charcoal surfaces and soft copper accents. Player artwork can tint its progress ring while the app’s navigation and controls keep a consistent palette. Theme colors and component styles are defined in `lib/core/theme.dart`.
+**Current scope:** Android only. The repository does not include iOS, web, or desktop app targets, a home-screen widget, or an offline download feature for online music. Light mode uses warm ivory surfaces and burnt-orange accents; dark mode uses charcoal surfaces and soft copper accents. Album artwork uses rounded squares. Playback progress appears once in the seek bar with time labels; the app’s navigation and controls keep a consistent palette. Theme colors and component styles are defined in `lib/core/theme.dart`.
 
 ## Install the app
 
@@ -84,6 +85,12 @@ Saving an online track saves a reference, not an audio file. It still needs inte
 Open **Discover** to browse YouTube music. Type a search, or use **Trending Today**, **Top Charts**, **Chill / Lofi**, **Workout**, **Pop**, or **Rock**. Use **Load more** when additional results are available.
 
 Category labels describe suggested YouTube music searches, not global charts. Trending Today, Top Charts, and the genre shortcuts run their respective search queries.
+
+Use **Language** and **Genres** to combine constraints, such as Spanish + Latin + Rock. The query contains all selected terms, and results must match every label in title/channel metadata. NewPipe does not supply reliable recording-language or genre fields: these are strict metadata-label matches, not audio-language detection. Unlabeled recordings are omitted, and an empty filtered page may still have more results.
+
+Use the search field’s **Songs / Artists** menu to search for an artist. Tap an artist card to open their profile, provider description/subscriber information when available, attributed top search tracks, and albums. Album and radio collections open playable track lists with pagination. Profiles do not invent missing biographies, releases, or popularity statistics.
+
+Tap **Follow artist** on a profile to save the artist locally. **Library → From your artists** offers Tracks, Releases, and Radios from followed artists. Use its artist menu to reopen a profile and unfollow. Following is local personalization; it does not subscribe your YouTube account or require login. Recommendations can be empty when the catalog does not supply attributable results.
 
 In **Settings → Streaming & Discovery**, choose YouTube audio quality: **Data saver (64 kbps)**, **Standard (128 kbps)**, or **High (256 kbps)**. These are selection targets; the available stream determines the actual format and bitrate.
 
@@ -194,9 +201,11 @@ Riverpod wires repositories and app state. SQLite (`sqflite`) holds durable data
 
 `Track.source` identifies local or YouTube tracks. `SvaraHandler` owns the logical queue, active index, shuffle, repeat, and persistence. Queues preserve every playable track without a size cap. `SvaraHandler` passes local URIs directly to the audio engine and resolves YouTube references at playback time, and the audio engine receives one current source. On an online playback failure, the handler attempts one fresh resolution before pausing with queue and position preserved. Gapless transitions and next-track extraction prefetch are not implemented.
 
-The YouTube plugin registers with both foreground and background Flutter engines. Native dependencies are pinned in `packages/svara_youtube/android/build.gradle`: NewPipeExtractor **v0.26.5**, OkHttp **4.12.0**, and NIO desugaring **2.1.5**. Native requests use bounded workers, cancellation, and deadlines; transient repository requests retry at most twice.
+The YouTube plugin registers with both foreground and background Flutter engines. Native dependencies are pinned in `packages/svara_youtube/android/build.gradle`: NewPipeExtractor **v0.26.5**, OkHttp **4.12.0**, and NIO desugaring **2.1.5**. Artist searches use NewPipe’s music artist filter, albums use its music album filter, and radio searches use music playlists. Native requests use bounded workers, cancellation, and deadlines; transient repository requests retry at most twice.
 
 YouTube song searches normally keep results between 45 seconds and 20 minutes and exclude likely non-music titles. Explicit mix, album, compilation, concert, or DJ-set searches use music video results and may allow long-form uploads up to four hours. An empty filtered page can still have a continuation. Tests cover this policy in Dart and Kotlin.
+
+Custom route transitions, coordinated artwork heroes, and additional button micro-animations are deferred. See [motion architecture](docs/MOTION.md).
 
 ## Checks and tests
 

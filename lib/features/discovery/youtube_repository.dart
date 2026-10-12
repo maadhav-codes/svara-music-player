@@ -10,10 +10,23 @@ import '../../core/store.dart';
 import '../../core/track.dart';
 import '../../core/resolved_track.dart';
 import '../../core/memory_cache.dart';
+import 'artist.dart';
+import 'discovery_filters.dart';
 
 class YouTubePage {
   const YouTubePage(this.tracks, this.continuation);
   final List<Track> tracks;
+  final String? continuation;
+}
+
+class CatalogPage {
+  const CatalogPage({
+    this.artists = const [],
+    this.collections = const [],
+    this.continuation,
+  });
+  final List<Artist> artists;
+  final List<MusicCollection> collections;
   final String? continuation;
 }
 
@@ -183,8 +196,10 @@ class YouTubeRepository {
     String query, {
     String? continuation,
     CancelToken? cancel,
+    DiscoveryFilters filters = const DiscoveryFilters(),
+    Artist? artist,
   }) async {
-    query = query.trim();
+    query = filters.query(query.trim());
     if (query.isEmpty) return const YouTubePage([], null);
     if (query.length > 300) {
       throw const SourceException(
@@ -195,7 +210,7 @@ class YouTubeRepository {
     final musicQuery = _musicQuery(query);
     // Keep generic-video cache entries and their native page tokens out of the
     // music catalog. Use the same effective query on every continuation page.
-    final key = 'youtube:music-search:v1:$musicQuery:${continuation ?? ''}';
+    final key = 'youtube:music-search:v2:$musicQuery:${continuation ?? ''}';
     final cached = _searchCache.get(key);
     var data = cached == null ? null : jsonDecode(cached) as Map;
     if (cancel?.isCancelled ?? false) throw cancel!.cancelError!;
@@ -208,13 +223,98 @@ class YouTubeRepository {
       if (encoded.length <= 500000) _searchCache.put(key, encoded);
     }
     final tracks = (data['tracks'] as List)
+        .where(
+          (t) =>
+              artist == null ||
+              _artistMatches(
+                artist,
+                t['uploader'] as String? ?? '',
+                t['uploaderUrl'] as String?,
+              ),
+        )
         .map((t) => _track(Map<String, dynamic>.from(t as Map)))
+        .where((track) => filters.matches(track.title, track.artist))
         .toList();
     // Stable preference: preserve upstream relevance within each tier.
     return YouTubePage([
       for (var priority = 0; priority < 3; priority++)
         ...tracks.where((track) => _musicPriority(track) == priority),
     ], data['continuation'] as String?);
+  }
+
+  bool _artistMatches(Artist artist, String name, String? url) {
+    if (url != null && url.isNotEmpty) {
+      return Uri.tryParse(url)?.pathSegments.lastOrNull == artist.id;
+    }
+    String normalize(String s) =>
+        s.toLowerCase().replaceAll(RegExp(r'\s*-\s*topic$|vevo$'), '').trim();
+    return normalize(name) == normalize(artist.name);
+  }
+
+  Future<CatalogPage> catalog(
+    String query, {
+    String kind = 'artists',
+    String? continuation,
+    CancelToken? cancel,
+    Artist? artist,
+  }) async {
+    query = query.trim();
+    if (query.isEmpty) return const CatalogPage();
+    if (query.length > 300 || !{'artists', 'albums', 'radios'}.contains(kind)) {
+      throw const SourceException('invalid', 'Invalid catalog search.');
+    }
+    final key = 'catalog:$kind:$query:${continuation ?? ''}';
+    final cached = _searchCache.get(key);
+    final data = cached == null
+        ? await _call('search', {
+            'query': query,
+            'kind': kind,
+            'continuation': continuation,
+          }, cancel: cancel)
+        : Map<String, dynamic>.from(jsonDecode(cached) as Map);
+    if (cancel?.isCancelled ?? false) throw cancel!.cancelError!;
+    final encoded = jsonEncode(data);
+    if (encoded.length <= 500000) _searchCache.put(key, encoded);
+    return CatalogPage(
+      artists: (data['artists'] as List? ?? [])
+          .map((j) => Artist.fromJson(Map<String, dynamic>.from(j as Map)))
+          .toList(),
+      collections: (data['collections'] as List? ?? [])
+          .map(
+            (j) =>
+                MusicCollection.fromJson(Map<String, dynamic>.from(j as Map)),
+          )
+          .where(
+            (c) =>
+                artist == null ||
+                _artistMatches(artist, c.artist, null) ||
+                c.name.toLowerCase().contains(artist.name.toLowerCase()),
+          )
+          .toList(),
+      continuation: data['continuation'] as String?,
+    );
+  }
+
+  Future<Artist> artistDetails(Artist artist, {CancelToken? cancel}) async =>
+      Artist.fromJson(
+        await _call('artist', {'url': artist.url}, cancel: cancel),
+      );
+
+  Future<YouTubePage> collection(
+    MusicCollection collection, {
+    String? continuation,
+    CancelToken? cancel,
+  }) async {
+    final data = await _call('collection', {
+      'url': collection.url,
+      'continuation': continuation,
+    }, cancel: cancel);
+    return YouTubePage(
+      (data['tracks'] as List)
+          .map((j) => _track(Map<String, dynamic>.from(j as Map)))
+          .toList(),
+      data['continuation'] as String?,
+    );
   }
 
   void _validate(Track track) {

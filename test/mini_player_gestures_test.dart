@@ -121,7 +121,10 @@ void main() {
       expect(find.byType(PlayerScreen), findsOneWidget);
       expect(handler.nextCalls, 2);
       expect(handler.previousCalls, 1);
-      await tester.drag(find.byType(ClipOval).first, const Offset(120, 0));
+      await tester.drag(
+        find.byKey(const ValueKey('player-artwork')),
+        const Offset(120, 0),
+      );
       await tester.pumpAndSettle();
       expect(find.byType(PlayerScreen), findsOneWidget);
       // Force metadata to scroll to exercise dismissal away from its top.
@@ -152,14 +155,14 @@ void main() {
       tester.view.resetDevicePixelRatio();
       await tester.pumpAndSettle();
       final cancelledClose = await tester.startGesture(
-        tester.getCenter(find.byType(ClipOval).first),
+        tester.getCenter(find.byKey(const ValueKey('player-artwork'))),
       );
       await cancelledClose.moveBy(const Offset(0, 120));
       await cancelledClose.cancel();
       await tester.pumpAndSettle();
       expect(find.byType(PlayerScreen), findsOneWidget);
       await tester.fling(
-        find.byType(ClipOval).first,
+        find.byKey(const ValueKey('player-artwork')),
         const Offset(0, 120),
         700,
       );

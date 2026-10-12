@@ -1,3 +1,4 @@
+import '../../core/app_routes.dart';
 import '../lyrics/lyrics_screen.dart';
 
 import 'dart:async';
@@ -48,7 +49,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
     try {
       await Navigator.push<void>(
         context,
-        MaterialPageRoute(builder: (_) => const PlayerScreen()),
+        AppPageRoute(builder: (_) => const PlayerScreen()),
       );
     } finally {
       _expanded = false;
@@ -201,13 +202,13 @@ class PlayButton extends StatelessWidget {
           snapshot.data?.processingState == AudioProcessingState.buffering;
       return IconButton.filled(
         tooltip: playing ? 'Pause' : 'Play',
-        iconSize: large ? 44 : 28,
-        padding: EdgeInsets.all(large ? 20 : 8),
+        iconSize: large ? 32 : 28,
+        padding: EdgeInsets.all(large ? 14 : 8),
         onPressed: playing ? handler.pause : handler.play,
         icon: loading
             ? SizedBox(
-                width: large ? 44 : 28,
-                height: large ? 44 : 28,
+                width: large ? 32 : 28,
+                height: large ? 32 : 28,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   color: Theme.of(context).colorScheme.onPrimary,
@@ -229,8 +230,6 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
-  ColorScheme? accent;
-  String? artId;
   final _scroll = ScrollController();
   @override
   void dispose() {
@@ -238,24 +237,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     super.dispose();
   }
 
-  String artworkKey(Track t) =>
-      '${t.id}:${t.artwork}:${Theme.of(context).brightness.name}';
-  Future<void> derive(Track t) async {
-    final key = artworkKey(t);
-    artId = key;
-    accent = null;
-    final bytes = await ArtworkCache.load(t, ref);
-    if (bytes == null || !mounted) return;
-    final scheme = await ColorScheme.fromImageProvider(
-      provider: MemoryImage(bytes),
-      brightness: Theme.of(context).brightness,
-    );
-    if (mounted && artId == key) setState(() => accent = scheme);
-  }
-
   void openLyrics(BuildContext context) => Navigator.push(
     context,
-    MaterialPageRoute<void>(builder: (_) => const LyricsScreen()),
+    AppPageRoute<void>(builder: (_) => const LyricsScreen()),
   );
 
   @override
@@ -265,7 +249,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       stream: h.mediaItem,
       builder: (_, snapshot) {
         final t = active(h);
-        if (t != null && artId != artworkKey(t)) unawaited(derive(t));
         return Theme(
           data: Theme.of(context),
           child: Builder(
@@ -327,9 +310,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       tooltip: 'Queue',
                       onPressed: () => Navigator.push(
                         context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const QueueScreen(),
-                        ),
+                        AppPageRoute<void>(builder: (_) => const QueueScreen()),
                       ),
                       icon: const Icon(Icons.queue_music),
                     ),
@@ -346,59 +327,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             final horizontalPadding = viewport.maxWidth < 360
                                 ? 12.0
                                 : 24.0;
-                            Widget artwork(
-                              double size,
-                            ) => StreamBuilder<Duration>(
-                              stream: h.player.positionStream,
-                              builder: (_, pos) {
-                                final duration =
-                                    h.player.duration ??
-                                    Duration(milliseconds: t.durationMs);
-                                final progress = duration.inMilliseconds <= 0
-                                    ? 0.0
-                                    : ((h.position).inMilliseconds /
-                                              duration.inMilliseconds)
-                                          .clamp(0.0, 1.0);
-                                return GestureDetector(
-                                  onVerticalDragEnd: (details) {
-                                    if ((details.primaryVelocity ?? 0) < -150) {
-                                      openLyrics(context);
-                                    }
-                                  },
-                                  child: Semantics(
-                                    label:
-                                        'Track progress ${(progress * 100).round()} percent. Swipe up for lyrics',
-                                    child: SizedBox(
-                                      width: size,
-                                      height: size,
-                                      child: Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          SizedBox.expand(
-                                            child: CircularProgressIndicator(
-                                              value: progress,
-                                              strokeWidth: 4,
-                                              color: accent?.primary,
-                                              backgroundColor: Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceContainerHighest,
-                                            ),
-                                          ),
-                                          ClipOval(
-                                            child: TrackArt(
-                                              t,
-                                              size: (size - 24).clamp(
-                                                0.0,
-                                                size,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
+                            Widget artwork(double size) => GestureDetector(
+                              key: const ValueKey('player-artwork'),
+                              onVerticalDragEnd: (details) {
+                                if ((details.primaryVelocity ?? 0) < -150) {
+                                  openLyrics(context);
+                                }
                               },
+                              child: Semantics(
+                                label: 'Album artwork. Swipe up for lyrics',
+                                child: TrackArt(t, size: size),
+                              ),
                             );
                             Widget metadata() => Column(
                               mainAxisSize: MainAxisSize.min,
