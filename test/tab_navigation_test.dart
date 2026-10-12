@@ -102,13 +102,8 @@ void main() {
           ),
         );
         await settle();
-        final discoveryState = tester.state(
-          find.byType(DiscoveryScreen, skipOffstage: false),
-        );
-        final playlistsState = tester.state(
-          find.byType(PlaylistsScreen, skipOffstage: false),
-        );
         await tab('Discover');
+        final discoveryState = tester.state(find.byType(DiscoveryScreen));
         await tester.enterText(find.byType(TextField), 'quiet piano');
         await tester.pump(const Duration(milliseconds: 400));
         await settle();
@@ -118,6 +113,7 @@ void main() {
         discoveryScroll.jumpTo(500);
         await tester.pump();
         await tab('Playlists');
+        final playlistsState = tester.state(find.byType(PlaylistsScreen));
         final playlistScroll = position(PlaylistsScreen);
         playlistScroll.jumpTo(500);
         await tester.pump();
@@ -154,6 +150,87 @@ void main() {
         position(PlaylistsScreen).jumpTo(0);
         await tester.pump();
         expect(find.text('Fresh playlist'), findsOneWidget);
+        Future<void> swipe(double dx, int expectedIndex) async {
+          await tester.dragFrom(const Offset(195, 450), Offset(dx, 0));
+          await settle();
+          expect(
+            tester
+                .widget<NavigationBar>(find.byType(NavigationBar))
+                .selectedIndex,
+            expectedIndex,
+          );
+          final controller = tester
+              .widget<PageView>(find.byType(PageView))
+              .controller!;
+          expect(controller.page, closeTo(expectedIndex.toDouble(), 0.001));
+        }
+
+        // Playlists -> Discover -> Library, including the first edge bounce.
+        await swipe(300, 1);
+        expect(
+          tester.state(find.byType(DiscoveryScreen)),
+          same(discoveryState),
+        );
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'quiet piano',
+        );
+        expect(searches, searchCount);
+        await swipe(300, 0);
+        await swipe(300, 0);
+        // Library -> Discover -> Playlists, including the final edge bounce.
+        await swipe(-300, 1);
+        await swipe(-300, 2);
+        await swipe(-300, 2);
+        expect(
+          tester.state(find.byType(PlaylistsScreen)),
+          same(playlistsState),
+        );
+        expect(find.text('Fresh playlist'), findsOneWidget);
+        // A short drag settles back; vertical scrolling stays within the tab.
+        await tester.dragFrom(const Offset(195, 450), const Offset(30, 0));
+        await settle();
+        expect(
+          tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex,
+          2,
+        );
+        await tester.dragFrom(const Offset(195, 450), const Offset(0, -100));
+        await settle();
+        expect(
+          tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex,
+          2,
+        );
+        // Non-adjacent tab taps and rapid changes finish at the final destination.
+        await tab('Library');
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NavigationBar),
+            matching: find.text('Playlists'),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NavigationBar),
+            matching: find.text('Discover'),
+          ),
+        );
+        await settle();
+        expect(
+          tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex,
+          1,
+        );
+        expect(
+          tester.widget<PageView>(find.byType(PageView)).controller!.page,
+          closeTo(1, 0.001),
+        );
+
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());

@@ -51,12 +51,14 @@ If a release offers several APKs, choose `arm64-v8a` for most modern phones, `ar
 
 ## Using Svara
 
+Swipe left or right to move between **Library**, **Discover**, and **Playlists**, or tap a bottom tab. Tabs slide smoothly, bounce at either end, and keep your searches and scroll positions when you return.
+
 ### Find and play your music
 
 Copy music onto your phone using USB or a file manager, then open **Library** and pull down to refresh or tap its refresh button. Svara reads Android’s media index; it does not import or duplicate your audio files.
 
 - Browse **All**, **Artists**, **Albums**, **Folders**, or **Recently played**. Use search and sorting to find a song.
-- Tap a song to play it, or choose **Library options → Mix my library** to start a mix of local tracks.
+- Tap a song to play it, or choose the **Mix my library** shuffle button to start a mix of local tracks.
 - Open a song’s **⋮ Song options** menu to favorite it, add it to a playlist, play it next, add it to the queue, or view file details.
 
 ### Control playback

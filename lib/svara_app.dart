@@ -34,6 +34,7 @@ class Home extends ConsumerStatefulWidget {
 
 class _HomeState extends ConsumerState<Home> {
   int index = 0;
+  final pages = PageController();
   StreamSubscription<String>? errors;
   @override
   void initState() {
@@ -48,7 +49,7 @@ class _HomeState extends ConsumerState<Home> {
           duration: const Duration(seconds: 8),
           action: SnackBarAction(
             label: 'Library',
-            onPressed: () => setState(() => index = 0),
+            onPressed: () => switchTab(0),
           ),
         ),
       );
@@ -58,7 +59,17 @@ class _HomeState extends ConsumerState<Home> {
   @override
   void dispose() {
     errors?.cancel();
+    pages.dispose();
     super.dispose();
+  }
+
+  void switchTab(int destination) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    pages.animateToPage(
+      destination,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -87,14 +98,23 @@ class _HomeState extends ConsumerState<Home> {
         ),
       ],
     ),
-    body: IndexedStack(
-      index: index,
+    body: PageView(
+      controller: pages,
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      onPageChanged: (value) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        setState(() => index = value);
+      },
       children: [
-        LibraryScreen(onDiscover: () => setState(() => index = 1)),
-        const DiscoveryScreen(),
-        PlaylistsScreen(
-          onLibrary: () => setState(() => index = 0),
-          onDiscover: () => setState(() => index = 1),
+        _KeepAliveTab(child: LibraryScreen(onDiscover: () => switchTab(1))),
+        const _KeepAliveTab(child: DiscoveryScreen()),
+        _KeepAliveTab(
+          child: PlaylistsScreen(
+            onLibrary: () => switchTab(0),
+            onDiscover: () => switchTab(1),
+          ),
         ),
       ],
     ),
@@ -104,7 +124,7 @@ class _HomeState extends ConsumerState<Home> {
         const MiniPlayer(),
         NavigationBar(
           selectedIndex: index,
-          onDestinationSelected: (value) => setState(() => index = value),
+          onDestinationSelected: switchTab,
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.library_music_outlined),
@@ -126,4 +146,25 @@ class _HomeState extends ConsumerState<Home> {
       ],
     ),
   );
+}
+
+/// Keep searches, filters and scroll positions when a page leaves the viewport.
+class _KeepAliveTab extends StatefulWidget {
+  const _KeepAliveTab({required this.child});
+  final Widget child;
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
 }
