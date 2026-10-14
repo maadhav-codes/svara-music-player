@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../core/track.dart';
 import '../../core/app_routes.dart';
+import '../../core/widgets/infinite_results_list.dart';
 import '../library/library_screen.dart';
 import 'artist.dart';
 import 'youtube_repository.dart';
@@ -248,6 +249,7 @@ class CollectionScreen extends ConsumerStatefulWidget {
 class _CollectionScreenState extends ConsumerState<CollectionScreen> {
   final tracks = <Track>[];
   String? next, error;
+  final consumedCursors = <String>{}, trackIds = <String>{};
   bool loading = false;
   CancelToken? cancel;
   @override
@@ -258,6 +260,7 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
 
   Future<void> load() async {
     if (loading) return;
+    final previousCursor = next;
     final token = cancel = CancelToken();
     setState(() {
       loading = true;
@@ -269,9 +272,12 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
           .collection(widget.collection, continuation: next, cancel: token);
       if (!mounted || token.isCancelled) return;
       setState(() {
-        final ids = tracks.map((t) => t.id).toSet();
-        tracks.addAll(page.tracks.where((t) => ids.add(t.id)));
-        next = page.continuation;
+        tracks.addAll(page.tracks.where((t) => trackIds.add(t.id)));
+        if (previousCursor != null) consumedCursors.add(previousCursor);
+        next =
+            page.tracks.isEmpty || consumedCursors.contains(page.continuation)
+            ? null
+            : page.continuation;
       });
     } catch (_) {
       if (mounted && !token.isCancelled) {
@@ -291,21 +297,27 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.collection.name)),
-    body: ListView(
-      children: [
-        for (var i = 0; i < tracks.length; i++)
-          SongTile(
-            tracks[i],
-            onPlay: () => ref.read(handlerProvider).setQueue(tracks, index: i),
-          ),
-        if (loading) const LinearProgressIndicator(),
-        if (error != null)
-          TextButton(onPressed: load, child: Text('$error Retry')),
-        if (!loading && next != null && error == null)
-          TextButton(onPressed: load, child: const Text('Load more')),
-        if (!loading && tracks.isEmpty && error == null)
-          const ListTile(title: Text('No playable tracks in this collection.')),
-      ],
+    body: InfiniteResultsList(
+      itemCount: tracks.length,
+      loading: loading,
+      hasMore: next != null,
+      canLoad: error == null,
+      onLoadMore: load,
+      itemBuilder: (context, i) => SongTile(
+        tracks[i],
+        key: ValueKey(tracks[i].id),
+        onPlay: () => ref.read(handlerProvider).setQueue(tracks, index: i),
+      ),
+      footer: Column(
+        children: [
+          if (error != null)
+            TextButton(onPressed: load, child: Text('$error Retry')),
+          if (!loading && tracks.isEmpty && error == null)
+            const ListTile(
+              title: Text('No playable tracks in this collection.'),
+            ),
+        ],
+      ),
     ),
   );
 }

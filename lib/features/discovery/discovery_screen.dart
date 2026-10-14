@@ -8,6 +8,7 @@ import '../../core/providers.dart';
 import '../../core/track.dart';
 import '../../core/app_routes.dart';
 import '../../core/widgets/music_empty_state.dart';
+import '../../core/widgets/infinite_results_list.dart';
 import '../library/library_screen.dart';
 import 'discovery_category.dart';
 import 'discovery_filters.dart';
@@ -39,6 +40,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   String? error, continuation;
   bool loading = false, more = false;
   int generation = 0;
+  final consumedCursors = <String>{};
+  final trackIds = <String>{}, artistIds = <String>{};
+  final recordingIds = <String>{}, videoIds = <String>{};
 
   @override
   void initState() {
@@ -81,7 +85,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   }
 
   Future<void> load({bool reset = false}) async {
-    if (loading && !reset) return;
+    if (!reset && (loading || !more || error != null)) return;
     if (reset) {
       token?.cancel();
       generation++;
@@ -91,8 +95,14 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       chart = null;
       browseExpiresAt = null;
       continuation = null;
+      consumedCursors.clear();
+      trackIds.clear();
+      artistIds.clear();
+      recordingIds.clear();
+      videoIds.clear();
       more = false;
     }
+    final previousCursor = continuation;
     final version = generation;
     final request = token = CancelToken();
     setState(() {
@@ -134,20 +144,15 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         final matches = await matcher.matchPage(page, request);
         if (!mounted || generation != version) return;
         setState(() {
-          chart = page;
+          chart ??= page;
           if (browseExpiresAt == null ||
               page.expiresAt.isBefore(browseExpiresAt!)) {
             browseExpiresAt = page.expiresAt;
           }
-          final recordings = ranked.map((m) => m.recording.key).toSet();
-          final videos = ranked
-              .where((m) => m.track != null)
-              .map((m) => m.track!.id)
-              .toSet();
           for (final match in matches) {
-            if (!recordings.add(match.recording.key)) continue;
+            if (!recordingIds.add(match.recording.key)) continue;
             ranked.add(
-              match.track != null && !videos.add(match.track!.id)
+              match.track != null && !videoIds.add(match.track!.id)
                   ? RecordingMatch(
                       match.recording,
                       reason: 'Duplicate playback recording',
@@ -155,7 +160,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   : match,
             );
           }
-          continuation = page.cursor;
+          if (previousCursor != null) consumedCursors.add(previousCursor);
+          continuation =
+              page.entries.isEmpty || consumedCursors.contains(page.cursor)
+              ? null
+              : page.cursor;
           more = continuation != null;
         });
       } else if (mode == 'Artists') {
@@ -166,9 +175,13 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         );
         if (mounted && generation == version) {
           setState(() {
-            final ids = artists.map((a) => a.id).toSet();
-            artists.addAll(data.artists.where((a) => ids.add(a.id)));
-            continuation = data.continuation;
+            artists.addAll(data.artists.where((a) => artistIds.add(a.id)));
+            if (previousCursor != null) consumedCursors.add(previousCursor);
+            continuation =
+                data.artists.isEmpty ||
+                    consumedCursors.contains(data.continuation)
+                ? null
+                : data.continuation;
             more = continuation != null;
           });
         }
@@ -180,9 +193,13 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         );
         if (mounted && generation == version) {
           setState(() {
-            final ids = tracks.map((t) => t.id).toSet();
-            tracks.addAll(data.tracks.where((t) => ids.add(t.id)));
-            continuation = data.continuation;
+            tracks.addAll(data.tracks.where((t) => trackIds.add(t.id)));
+            if (previousCursor != null) consumedCursors.add(previousCursor);
+            continuation =
+                data.tracks.isEmpty ||
+                    consumedCursors.contains(data.continuation)
+                ? null
+                : data.continuation;
             more = continuation != null;
           });
         }
@@ -343,260 +360,269 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         : tracks.length;
     return RefreshIndicator(
       onRefresh: () => load(reset: true),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 16),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: searchController,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: 'Search songs or artists',
-                    suffixIcon: searchController.text.isEmpty
-                        ? browsing && capabilities != null
-                              ? IconButton(
-                                  tooltip: preferenceLabel,
-                                  icon: const Icon(Icons.tune_rounded),
-                                  onPressed: preferences,
-                                )
-                              : null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              searchController.clear();
-                              searchChanged('');
+      child: InfiniteResultsList(
+        itemCount: count,
+        loading: loading,
+        hasMore: more,
+        canLoad: error == null,
+        onLoadMore: load,
+        itemBuilder: (context, i) {
+          if (browsing) {
+            final match = ranked[i];
+            return match.track != null
+                ? SongTile(
+                    match.track!,
+                    key: ValueKey(match.recording.key),
+                    onPlay: () => playRanked(match.track!),
+                  )
+                : ListTile(
+                    key: ValueKey(match.recording.key),
+                    enabled: false,
+                    leading: Text('${match.recording.rank}'),
+                    title: Text(match.recording.title),
+                    subtitle: Text(
+                      '${match.recording.artists.isEmpty ? 'YouTube' : match.recording.artists.join(', ')} · ${match.reason}',
+                    ),
+                  );
+          }
+          if (mode == 'Songs') {
+            return SongTile(
+              tracks[i],
+              key: ValueKey(tracks[i].id),
+              onPlay: () =>
+                  ref.read(handlerProvider).setQueue(tracks, index: i),
+            );
+          }
+          final artist = artists[i];
+          return ListTile(
+            key: ValueKey(artist.id),
+            leading: CatalogArtwork(artist.artwork),
+            title: Text(artist.name),
+            subtitle: Text(
+              artist.description.isEmpty
+                  ? 'YouTube Music artist'
+                  : artist.description,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Icon(
+              followed.any((a) => a.id == artist.id)
+                  ? Icons.favorite
+                  : Icons.chevron_right,
+            ),
+            onTap: () => Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => ArtistScreen(artist)),
+            ),
+          );
+        },
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Search songs or artists',
+                  suffixIcon: searchController.text.isEmpty
+                      ? browsing && capabilities != null
+                            ? IconButton(
+                                tooltip: preferenceLabel,
+                                icon: const Icon(Icons.tune_rounded),
+                                onPressed: preferences,
+                              )
+                            : null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            searchController.clear();
+                            searchChanged('');
+                          },
+                        ),
+                ),
+                onChanged: searchChanged,
+              ),
+              SizedBox(height: browsing ? 16 : 12),
+              if (!browsing)
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'Songs',
+                      label: Text('Songs'),
+                      icon: Icon(Icons.music_note),
+                    ),
+                    ButtonSegment(
+                      value: 'Artists',
+                      label: Text('Artists'),
+                      icon: Icon(Icons.person),
+                    ),
+                  ],
+                  selected: {mode},
+                  onSelectionChanged: (value) {
+                    debounce?.cancel();
+                    mode = value.single;
+                    load(reset: true);
+                  },
+                ),
+              if (browsing) ...[
+                if (!ref.watch(discoveryCatalogProvider).configured) ...[
+                  Text(
+                    'Browse music',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Popular music and genre collections are not available yet. Search for a song or artist above.',
+                  ),
+                ] else ...[
+                  if (category != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        category = null;
+                        load(reset: true);
+                      },
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('All popular music'),
+                    ),
+                  Text(
+                    category == null
+                        ? capabilities == null
+                              ? 'Popular music'
+                              : capabilities!.browseTitle == null
+                              ? 'Popular in ${capabilities!.markets[filters.market]}'
+                              : '${capabilities!.browseTitle}${capabilities!.markets.length > 1 ? ' in ${capabilities!.markets[filters.market]}' : ''}'
+                        : '${category!.label} · ${capabilities?.markets[filters.market] ?? filters.market.toUpperCase()}',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (chart != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chart!.sourceName.startsWith('YouTube Charts')
+                                ? '${chart!.sourceName} · Fetched ${chart!.fetchedAt.toLocal().toIso8601String().substring(0, 10)} ${chart!.fetchedAt.toLocal().toIso8601String().substring(11, 16)}'
+                                : '${chart!.sourceName} · ${capabilities?.scopes[chart!.scope] ?? 'Most played'} · ${periodLabel(chart!)} · Updated ${chart!.updatedAt == null ? 'unknown' : dateLabel(chart!.updatedAt!)}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                        if (chart!.chartUrl != null)
+                          IconButton(
+                            icon: const Icon(Icons.open_in_new, size: 16),
+                            tooltip: 'Chart source',
+                            constraints: const BoxConstraints(
+                              minWidth: 48,
+                              minHeight: 48,
+                            ),
+                            onPressed: () async {
+                              try {
+                                await ref
+                                    .read(libraryRepositoryProvider)
+                                    .openUrl(chart!.chartUrl!);
+                              } catch (_) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'A browser is needed to open the chart source.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
                             },
                           ),
-                  ),
-                  onChanged: searchChanged,
-                ),
-                SizedBox(height: browsing ? 16 : 12),
-                if (!browsing)
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'Songs',
-                        label: Text('Songs'),
-                        icon: Icon(Icons.music_note),
-                      ),
-                      ButtonSegment(
-                        value: 'Artists',
-                        label: Text('Artists'),
-                        icon: Icon(Icons.person),
-                      ),
-                    ],
-                    selected: {mode},
-                    onSelectionChanged: (value) {
-                      debounce?.cancel();
-                      mode = value.single;
-                      load(reset: true);
-                    },
-                  ),
-                if (browsing) ...[
-                  if (!ref.watch(discoveryCatalogProvider).configured) ...[
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  if (category == null &&
+                      capabilities != null &&
+                      capabilities!.genres.isNotEmpty) ...[
+                    const SizedBox(height: 16),
                     Text(
-                      'Browse music',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      'Browse genres',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Popular music and genre collections are not available yet. Search for a song or artist above.',
-                    ),
-                  ] else ...[
-                    if (category != null)
-                      TextButton.icon(
-                        onPressed: () {
-                          category = null;
-                          load(reset: true);
-                        },
-                        icon: const Icon(Icons.arrow_back),
-                        label: const Text('All popular music'),
-                      ),
-                    Text(
-                      category == null
-                          ? capabilities == null
-                                ? 'Popular music'
-                                : capabilities!.browseTitle == null
-                                ? 'Popular in ${capabilities!.markets[filters.market]}'
-                                : '${capabilities!.browseTitle}${capabilities!.markets.length > 1 ? ' in ${capabilities!.markets[filters.market]}' : ''}'
-                          : '${category!.label} · ${capabilities?.markets[filters.market] ?? filters.market.toUpperCase()}',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    if (chart != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                    LayoutBuilder(
+                      builder: (context, constraints) => Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Expanded(
-                            child: Text(
-                              chart!.sourceName.startsWith('YouTube Charts')
-                                  ? '${chart!.sourceName} · Fetched ${chart!.fetchedAt.toLocal().toIso8601String().substring(0, 10)} ${chart!.fetchedAt.toLocal().toIso8601String().substring(11, 16)}'
-                                  : '${chart!.sourceName} · ${capabilities?.scopes[chart!.scope] ?? 'Most played'} · ${periodLabel(chart!)} · Updated ${chart!.updatedAt == null ? 'unknown' : dateLabel(chart!.updatedAt!)}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                          for (final genre in capabilities!.genres)
+                            SizedBox(
+                              width: (constraints.maxWidth - 8) / 2,
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  category = genre;
+                                  load(reset: true);
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
                                   ),
-                            ),
-                          ),
-                          if (chart!.chartUrl != null)
-                            IconButton(
-                              icon: const Icon(Icons.open_in_new, size: 16),
-                              tooltip: 'Chart source',
-                              constraints: const BoxConstraints(
-                                minWidth: 48,
-                                minHeight: 48,
+                                  child: Text(genre.label),
+                                ),
                               ),
-                              onPressed: () async {
-                                try {
-                                  await ref
-                                      .read(libraryRepositoryProvider)
-                                      .openUrl(chart!.chartUrl!);
-                                } catch (_) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'A browser is needed to open the chart source.',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
                             ),
                         ],
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    if (category == null &&
-                        capabilities != null &&
-                        capabilities!.genres.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Browse genres',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (context, constraints) => Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final genre in capabilities!.genres)
-                              SizedBox(
-                                width: (constraints.maxWidth - 8) / 2,
-                                child: OutlinedButton(
-                                  onPressed: () {
-                                    category = genre;
-                                    load(reset: true);
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    child: Text(genre.label),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 ],
               ],
-            ),
+            ],
           ),
-          if (browsing)
-            for (final match in ranked)
-              if (match.track != null)
-                SongTile(match.track!, onPlay: () => playRanked(match.track!))
-              else
-                ListTile(
-                  enabled: false,
-                  leading: Text('${match.recording.rank}'),
-                  title: Text(match.recording.title),
-                  subtitle: Text(
-                    '${match.recording.artists.isEmpty ? 'YouTube' : match.recording.artists.join(', ')} · ${match.reason}',
-                  ),
+        ),
+        footer: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              if (error != null) Text(error!, textAlign: TextAlign.center),
+              if (error != null)
+                TextButton(
+                  onPressed: () {
+                    if (count == 0) {
+                      load(reset: true);
+                    } else {
+                      error = null;
+                      load();
+                    }
+                  },
+                  child: const Text('Retry'),
                 ),
-          if (!browsing && mode == 'Songs')
-            for (var i = 0; i < tracks.length; i++)
-              SongTile(
-                tracks[i],
-                onPlay: () =>
-                    ref.read(handlerProvider).setQueue(tracks, index: i),
-              ),
-          if (!browsing && mode == 'Artists')
-            for (final artist in artists)
-              ListTile(
-                leading: CatalogArtwork(artist.artwork),
-                title: Text(artist.name),
-                subtitle: Text(
-                  artist.description.isEmpty
-                      ? 'YouTube Music artist'
-                      : artist.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              if (!loading &&
+                  error == null &&
+                  count == 0 &&
+                  (!browsing || ref.read(discoveryCatalogProvider).configured))
+                MusicEmptyState(
+                  title: browsing
+                      ? 'No popular music available'
+                      : mode == 'Artists'
+                      ? 'No artists found'
+                      : 'No songs found',
+                  message:
+                      'Try another song or artist in the search field above.',
+                  actionLabel: 'Clear search',
+                  icon: Icons.search_rounded,
+                  onAction: () {
+                    searchController.clear();
+                    searchChanged('');
+                  },
                 ),
-                trailing: Icon(
-                  followed.any((a) => a.id == artist.id)
-                      ? Icons.favorite
-                      : Icons.chevron_right,
-                ),
-                onTap: () => Navigator.push(
-                  context,
-                  AppPageRoute(builder: (_) => ArtistScreen(artist)),
-                ),
-              ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                if (loading) const CircularProgressIndicator(),
-                if (error != null) Text(error!, textAlign: TextAlign.center),
-                if (error != null)
-                  TextButton(
-                    onPressed: () => load(reset: true),
-                    child: const Text('Retry'),
-                  ),
-                if (!loading &&
-                    error == null &&
-                    count == 0 &&
-                    (!browsing ||
-                        ref.read(discoveryCatalogProvider).configured))
-                  MusicEmptyState(
-                    title: browsing
-                        ? 'No popular music available'
-                        : mode == 'Artists'
-                        ? 'No artists found'
-                        : 'No songs found',
-                    message:
-                        'Try another song or artist in the search field above.',
-                    actionLabel: 'Clear search',
-                    icon: Icons.search_rounded,
-                    onAction: () {
-                      searchController.clear();
-                      searchChanged('');
-                    },
-                  ),
-                if (more && !loading && error == null)
-                  OutlinedButton(
-                    onPressed: load,
-                    child: const Text('Load more'),
-                  ),
-              ],
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -70,13 +70,12 @@ void main() {
         expect(calls, 0);
         await tester.pump(const Duration(milliseconds: 200));
         await settle();
-        expect(calls, 1);
+        expect(calls, 2);
         expect(find.byType(SegmentedButton<String>), findsOneWidget);
         expect(find.text('First result'), findsOneWidget);
-        expect(find.textContaining('Test channel • YouTube'), findsOneWidget);
-        await tester.ensureVisible(find.text('Load more'));
-        await tester.tap(find.text('Load more'));
-        await settle();
+        expect(find.textContaining('Test channel • YouTube'), findsNWidgets(2));
+        expect(find.text('Load more'), findsNothing);
+        expect(find.text('End of list'), findsOneWidget);
         expect(calls, 2);
         expect(find.text('Second result'), findsOneWidget);
         await tester.ensureVisible(find.byTooltip('Song options').first);
