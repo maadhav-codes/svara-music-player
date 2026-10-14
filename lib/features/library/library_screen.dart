@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/track.dart';
+import '../../core/track_presentation.dart';
+import '../../core/widgets/track_version_labels.dart';
 import '../../core/artwork.dart';
 import '../../core/widgets/music_empty_state.dart';
 import '../playlists/playlists_screen.dart';
@@ -486,39 +488,60 @@ class SongTile extends ConsumerWidget {
   final VoidCallback? onRemove;
   final String? removeLabel;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-    horizontalTitleGap: 12,
-    minLeadingWidth: 44,
-    leading: TrackArt(track, size: 44),
-    title: Text(track.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-    subtitle: Text(
-      '${track.recordingArtist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    onTap: track.streamable
-        ? onPlay
-        : () => ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'This track is unavailable on ${track.source.label}.',
+  Widget build(BuildContext context, WidgetRef ref) {
+    final display = track.presentation;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      horizontalTitleGap: 12,
+      minLeadingWidth: 44,
+      leading: TrackArt(track, size: 44),
+      title: Semantics(
+        label: track.title,
+        excludeSemantics: true,
+        child: Text(
+          display.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${track.recordingArtist}${track.online ? ' • ${track.source.label}' : ''}${track.streamable ? '' : ' • Unavailable'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (display.versions.isNotEmpty || display.labels.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            TrackVersionLabels(display),
+          ],
+        ],
+      ),
+      onLongPress: () => showOriginalTrackTitle(context, track),
+      onTap: track.streamable
+          ? onPlay
+          : () => ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'This track is unavailable on ${track.source.label}.',
+                ),
               ),
             ),
-          ),
-    trailing: IconButton(
-      tooltip: 'Song options',
-      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-      icon: const Icon(Icons.more_vert),
-      onPressed: () => showTrackOptions(
-        context,
-        ref,
-        track,
-        onRemove: onRemove,
-        removeLabel: removeLabel,
+      trailing: IconButton(
+        tooltip: 'Song options',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        icon: const Icon(Icons.more_vert),
+        onPressed: () => showTrackOptions(
+          context,
+          ref,
+          track,
+          onRemove: onRemove,
+          removeLabel: removeLabel,
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 Future<void> showTrackOptions(

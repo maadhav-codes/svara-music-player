@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/track.dart';
+import '../../core/track_presentation.dart';
+import '../../core/widgets/track_version_labels.dart';
 import '../../core/artwork.dart';
 import '../library/library_screen.dart';
 import '../playlists/playlists_screen.dart';
@@ -89,6 +91,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
       stream: h.mediaItem,
       builder: (_, snapshot) {
         final t = active(h);
+        final display = t?.presentation;
         if (t == null) return const SizedBox();
         return Material(
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -135,7 +138,8 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            t.title,
+                                            display!.title,
+                                            semanticsLabel: t.title,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
@@ -143,7 +147,9 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> {
                                             ),
                                           ),
                                           Text(
-                                            t.recordingArtist,
+                                            display.versions.isEmpty
+                                                ? t.recordingArtist
+                                                : '${display.versions.join(' · ')} • ${t.recordingArtist}',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -293,6 +299,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       stream: h.mediaItem,
       builder: (_, snapshot) {
         final t = active(h);
+        final display = t?.presentation;
         return Theme(
           data: Theme.of(context),
           child: Builder(
@@ -386,15 +393,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             Widget metadata() => Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  t.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                Tooltip(
+                                  message: t.title,
+                                  child: InkWell(
+                                    onTap: () =>
+                                        showOriginalTrackTitle(context, t),
+                                    child: Text(
+                                      display!.title,
+                                      semanticsLabel: t.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
@@ -406,6 +423,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                       .textTheme
                                       .titleMedium,
                                 ),
+                                if (display.versions.isNotEmpty ||
+                                    display.labels.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  TrackVersionLabels(display, centered: true),
+                                ],
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [

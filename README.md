@@ -97,6 +97,8 @@ To follow an artist, enter a search, select **Artists**, open a profile, and tap
 
 The full player shows title and artist prominently. Open **Song options → Track Info** for source attribution and **Open in YouTube**.
 
+Online song titles use a conservative display cleanup: recognized format/quality tags and exact repeated artist names are shortened, while Remix, Live, Acoustic, Instrumental, and Remastered details remain visible as version labels. Unknown text and featured-artist credits are retained. “Audio” describes title wording; “Songs catalog” comes from provider metadata. Neither label authenticates an official release. Long-press a song row or tap the full-player title to reveal the selectable original title. Track Info, saved metadata, matching, and playback retain the original title; local file tags are displayed unchanged.
+
 Choose audio quality in **Settings → Streaming & Discovery**: Data saver (64 kbps), Standard (128 kbps), or High (256 kbps). These are targets; the actual bitrate depends on the available stream.
 
 Songs search always uses YouTube Music's Songs catalog, including mix and album queries. Playback checks recording evidence before requesting an audio-only stream and rejects explicit cinematic/music-video and live-version labels. Older playlists and charts can contain video IDs that fail this check; search for the song's album recording instead. See [studio audio architecture](docs/studio-audio.md) for the selection policy and playback contract.
