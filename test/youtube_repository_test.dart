@@ -78,6 +78,7 @@ void main() {
         expect(call.method, 'search');
         final args = call.arguments as Map;
         expect(args['query'], 'music');
+        expect(args['kind'], 'songs');
         return {
           'tracks': [dto],
           'continuation': args['continuation'] == null ? 'opaque-page' : null,
@@ -122,6 +123,7 @@ void main() {
     }.entries) {
       final first = await repo.search(entry.key);
       expect(sent.last['query'], entry.value);
+      expect(sent.last['kind'], 'songs');
       await repo.search(entry.key, continuation: first.continuation);
       expect(sent.last['query'], entry.value);
       expect(sent.last['continuation'], 'next');
@@ -203,6 +205,7 @@ void main() {
       messenger.setMockMethodCallHandler(
         channel,
         (_) async => {
+          'studioAudioVerified': true,
           'track': dto,
           'url': 'https://media.example/audio?signature=secret',
           'headers': {'X-Test': 'temporary'},
@@ -257,6 +260,49 @@ void main() {
   });
 
   test(
+    'studio resolution fails closed and never substitutes another ID',
+    () async {
+      final valid = <String, Object?>{
+        'studioAudioVerified': true,
+        'mimeType': 'audio/webm',
+        'track': {...dto, 'musicCatalogSong': true},
+        'url': 'https://media.example/audio',
+      };
+      for (final entry in <(Map<String, Object?>, String)>[
+        ({...valid, 'studioAudioVerified': null}, 'no_studio_audio'),
+        ({...valid, 'studioAudioVerified': false}, 'no_studio_audio'),
+        ({...valid, 'mimeType': 'video/mp4'}, 'unsupported_format'),
+        ({...valid, 'mimeType': null}, 'unsupported_format'),
+        (
+          {
+            ...valid,
+            'track': {...dto, 'videoId': 'bbbbbbbbbbb'},
+          },
+          'invalid',
+        ),
+      ]) {
+        var calls = 0;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          calls++;
+          return entry.$1;
+        });
+        await expectLater(
+          repo.resolve(reference),
+          throwsA(
+            isA<SourceException>().having((e) => e.code, 'code', entry.$2),
+          ),
+        );
+        expect(calls, 1);
+      }
+      messenger.setMockMethodCallHandler(channel, (_) async => valid);
+      final result = await repo.resolve(reference, alternative: true);
+      expect(result.track.id, reference.id);
+      expect(result.track.musicCatalogSong, isTrue);
+      expect(result.stream.mimeType, 'audio/webm');
+    },
+  );
+
+  test(
     'restrictions and parser failures are sanitized and never retried',
     () async {
       for (final code in [
@@ -264,6 +310,7 @@ void main() {
         'unavailable',
         'extractor',
         'unsupported_format',
+        'no_studio_audio',
       ]) {
         var calls = 0;
         messenger.setMockMethodCallHandler(channel, (_) async {
@@ -329,8 +376,19 @@ void main() {
 
   test('expired or non-HTTPS streams and invalid IDs are rejected', () async {
     for (final data in [
-      {'track': dto, 'url': 'http://media.example/audio'},
-      {'track': dto, 'url': 'https://media.example/audio', 'expiresAt': 1},
+      {
+        'studioAudioVerified': true,
+        'mimeType': 'audio/mp4',
+        'track': dto,
+        'url': 'http://media.example/audio',
+      },
+      {
+        'studioAudioVerified': true,
+        'mimeType': 'audio/mp4',
+        'track': dto,
+        'url': 'https://media.example/audio',
+        'expiresAt': 1,
+      },
     ]) {
       messenger.setMockMethodCallHandler(channel, (_) async => data);
       await expectLater(

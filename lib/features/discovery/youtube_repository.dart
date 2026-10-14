@@ -162,6 +162,7 @@ class YouTubeRepository {
     'rate_limit' => 'YouTube is limiting requests. Please try again later.',
     'unsupported_format' =>
       'No supported audio stream is available for this video.',
+    'no_studio_audio' => 'A studio audio version could not be verified. Search for the song in Songs and select its album recording.',
     'extractor' => 'YouTube extraction is temporarily unavailable. An app update may be needed.',
     'invalid' => 'Invalid YouTube request or response.',
     _ => 'Cannot reach YouTube. Retry or choose phone music in Library.',
@@ -193,13 +194,14 @@ class YouTubeRepository {
     final musicQuery = _musicQuery(query);
     // Keep generic-video cache entries and their native page tokens out of the
     // music catalog. Use the same effective query on every continuation page.
-    final key = 'youtube:music-search:v2:$musicQuery:${continuation ?? ''}';
+    final key = 'youtube:studio-songs:v3:$musicQuery:${continuation ?? ''}';
     final cached = _searchCache.get(key);
     var data = cached == null ? null : jsonDecode(cached) as Map;
     if (cancel?.isCancelled ?? false) throw cancel!.cancelError!;
     if (data == null) {
       data = await _call('search', {
         'query': musicQuery,
+        'kind': 'songs',
         'continuation': continuation,
       }, cancel: cancel);
       final encoded = jsonEncode(data);
@@ -323,6 +325,20 @@ class YouTubeRepository {
       'quality': quality.name,
       'alternative': alternative,
     }, cancel: cancel);
+    // The bridge must verify the recording AND return an audio-only format.
+    // Fail closed if an older/incompatible bridge omits either guarantee.
+    if (data['studioAudioVerified'] != true) {
+      throw const SourceException(
+        'no_studio_audio',
+        'A studio audio version could not be verified. Search for the song in Songs and select its album recording.',
+      );
+    }
+    if (!{'audio/mp4', 'audio/webm'}.contains(data['mimeType'])) {
+      throw const SourceException(
+        'unsupported_format',
+        'The source did not return a supported audio-only stream.',
+      );
+    }
     final uri = Uri.tryParse(data['url'] as String? ?? '');
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
       throw const SourceException(
@@ -346,9 +362,16 @@ class YouTubeRepository {
         'YouTube returned an expired stream. Please retry.',
       );
     }
+    final resolved = _track(Map<String, dynamic>.from(data['track'] as Map));
+    if (resolved.id != reference.id) {
+      throw const SourceException(
+        'invalid',
+        'The audio source returned a different recording.',
+      );
+    }
     return ResolvedTrack(
       Track.fromJson({
-        ..._track(Map<String, dynamic>.from(data['track'] as Map)).toJson(),
+        ...resolved.toJson(),
         if (reference.catalog != null) 'catalog': reference.catalog,
       }),
       stream,

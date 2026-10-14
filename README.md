@@ -99,7 +99,9 @@ The full player shows title and artist prominently. Open **Song options → Trac
 
 Choose audio quality in **Settings → Streaming & Discovery**: Data saver (64 kbps), Standard (128 kbps), or High (256 kbps). These are targets; the actual bitrate depends on the available stream.
 
-The YouTube integration is unofficial and may stop working when YouTube changes. Restricted, removed, account-required, live, or unsupported videos may not play. Search cannot guarantee music-only results or correct artist attribution; a channel may belong to an uploader, cover artist, or remixer.
+Songs search always uses YouTube Music's Songs catalog, including mix and album queries. Playback checks recording evidence before requesting an audio-only stream and rejects explicit cinematic/music-video and live-version labels. Older playlists and charts can contain video IDs that fail this check; search for the song's album recording instead. See [studio audio architecture](docs/studio-audio.md) for the selection policy and playback contract.
+
+The YouTube integration is unofficial and may stop working when YouTube changes. Restricted, removed, account-required, live, or unsupported videos may not play. Catalog and Art Track metadata cannot guarantee that a recording contains no silence, dialogue, or noise, or that artist attribution is correct.
 
 ### Read lyrics, including offline files
 

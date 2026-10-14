@@ -154,6 +154,8 @@ void main() {
           if (call.method == 'cancel') return null;
           if (call.method == 'resolveAudio') {
             return {
+              'studioAudioVerified': true,
+              'mimeType': 'audio/mp4',
               'url': 'https://audio.example/stream',
               'track': {
                 'videoId': 'aaaaaaaaaaa',

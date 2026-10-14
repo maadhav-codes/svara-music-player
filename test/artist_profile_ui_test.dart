@@ -55,7 +55,12 @@ void main() {
         if (call.method == 'cancel') return null;
         if (call.method == 'artist') return artist;
         if (call.method == 'resolveAudio') {
-          return {'track': track, 'url': 'https://audio.example/stream'};
+          return {
+            'studioAudioVerified': true,
+            'mimeType': 'audio/mp4',
+            'track': track,
+            'url': 'https://audio.example/stream',
+          };
         }
         if (call.method == 'collection') {
           return {

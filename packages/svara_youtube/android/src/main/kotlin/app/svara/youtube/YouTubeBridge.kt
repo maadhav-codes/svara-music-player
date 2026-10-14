@@ -41,6 +41,16 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
     private val operations = ConcurrentHashMap<String, Operation>()
     private data class Continuation(val query: String, val page: Page, val expires: Long)
     private val continuations = LinkedHashMap<String, Continuation>()
+    private val studioSongs = LinkedHashMap<String, Long>()
+    private fun rememberStudioSong(id: String) = synchronized(studioSongs) {
+        val now = System.currentTimeMillis()
+        studioSongs.entries.removeAll { it.value <= now }
+        while (studioSongs.size >= 200) studioSongs.remove(studioSongs.keys.first())
+        studioSongs[id] = now + 15 * 60 * 1000
+    }
+    private fun knownStudioSong(id: String): Boolean = synchronized(studioSongs) {
+        (studioSongs[id] ?: 0) > System.currentTimeMillis()
+    }
     private class Operation(val result: MethodChannel.Result) {
         val context = RequestContext()
         val finished = AtomicBoolean(false)
@@ -54,6 +64,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         operations.keys.toList().forEach { cancel(it) }
         worker.shutdownNow()
         synchronized(continuations) { continuations.clear() }
+        synchronized(studioSongs) { studioSongs.clear() }
     }
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (call.method == "cancel") { cancel(call.argument<String>("requestId") ?: ""); result.success(null); return }
@@ -106,6 +117,7 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         if (chain.any { it is AgeRestrictedContentException || it is PrivateContentException || it is GeographicRestrictionException || it is PaidContentException || it is ReCaptchaException || it is SignInConfirmNotBotException }) return "restricted"
         if (chain.any { it is ContentNotAvailableException }) return "unavailable"
         if (chain.any { it is UnsupportedAudio }) return "unsupported_format"
+        if (chain.any { it is NoStudioAudio }) return "no_studio_audio"
         if (chain.any { it is IllegalArgumentException }) return "invalid"
         if (chain.any { it is IOException }) return "network"
         return "extractor"
@@ -135,14 +147,13 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
     private fun search(call: MethodCall): Map<String, Any?> {
         val query = call.argument<String>("query")?.trim() ?: ""
         require(query.isNotEmpty() && query.length <= 300)
-        // Songs uses YouTube Music's catalog, rather than general video results.
-        // Continuous mixes/album uploads are exposed by its music-video search.
+        // Never downgrade Songs to Videos, even for mix/album/concert queries.
         val kind = call.argument<String>("kind") ?: "songs"
         val filter = when (kind) {
             "artists" -> YoutubeSearchQueryHandlerFactory.MUSIC_ARTISTS
             "albums" -> YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS
             "radios" -> YoutubeSearchQueryHandlerFactory.MUSIC_PLAYLISTS
-            "songs" -> if (MusicSearchPolicy.allowsLongMusic(query)) YoutubeSearchQueryHandlerFactory.MUSIC_VIDEOS else YoutubeSearchQueryHandlerFactory.MUSIC_SONGS
+            "songs" -> YoutubeSearchQueryHandlerFactory.MUSIC_SONGS
             else -> throw IllegalArgumentException("Unknown music search kind")
         }
         val identity = "$kind:$query"
@@ -163,9 +174,11 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
         val tracks = items.filterIsInstance<StreamInfoItem>()
             .filter { it.streamType == StreamType.VIDEO_STREAM &&
-                MusicSearchPolicy.accepts(query, it.name, it.duration) }
+                MusicSearchPolicy.accepts(query, it.name, it.duration) &&
+                StudioAudioPolicy.accepts(it.name) }
             .take(50).mapNotNull { item ->
             val id = try { ServiceList.YouTube.streamLHFactory.getId(item.url) } catch (_: Exception) { return@mapNotNull null }
+            if (filter == YoutubeSearchQueryHandlerFactory.MUSIC_SONGS) rememberStudioSong(id)
             mapOf("videoId" to id, "title" to item.name, "uploader" to item.uploaderName,
                 "uploaderUrl" to item.uploaderUrl,
                 "musicCatalogSong" to (filter == YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
@@ -251,9 +264,35 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         return mapOf("tracks" to tracks, "continuation" to nextToken)
     }
     private class UnsupportedAudio : Exception()
+    private class NoStudioAudio : Exception()
+
+    private fun requireStudioRecording(info: StreamInfo) {
+        if (!StudioAudioPolicy.accepts(info.name)) throw NoStudioAudio()
+        if (knownStudioSong(info.id)) return
+        if (StudioAudioPolicy.hasArtTrackMetadata(info.description?.content.orEmpty())) {
+            rememberStudioSong(info.id)
+            return
+        }
+        // Saved playlists and charts can contain arbitrary video IDs. Recheck
+        // membership in Songs; never trust a persisted flag or replace the ID
+        // with the first similarly titled result. One bounded catalog request.
+        val query = "${info.name} ${info.uploaderName}".take(300)
+        val handler = ServiceList.YouTube.searchQHFactory.fromQuery(
+            query, listOf(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS), ""
+        )
+        val page = SearchInfo.getInfo(ServiceList.YouTube, handler)
+        val found = page.relatedItems.filterIsInstance<StreamInfoItem>().take(50).any {
+            StudioAudioPolicy.accepts(it.name) &&
+                ServiceList.YouTube.streamLHFactory.getId(it.url) == info.id
+        }
+        if (!found) throw NoStudioAudio()
+        rememberStudioSong(info.id)
+    }
+
     private fun resolve(call: MethodCall): Map<String, Any?> {
         val info = info(call)
         if (info.streamType != StreamType.VIDEO_STREAM) throw UnsupportedAudio()
+        requireStudioRecording(info)
         val target = when (call.argument<String>("quality")) { "dataSaver" -> 64; "high" -> 256; else -> 128 }
         val supported = info.audioStreams.filter {
             it.isUrl && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP &&
@@ -266,7 +305,8 @@ class YouTubeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
             ranked.firstOrNull { it.format != preferred.format } ?: ranked.getOrNull(1) ?: preferred
             else preferred
         val expires = Uri.parse(stream.content).getQueryParameter("expire")?.toLongOrNull()?.times(1000)
-        return mapOf("track" to metadata(info), "url" to stream.content,
+        return mapOf("track" to (metadata(info) + ("musicCatalogSong" to true)),
+            "studioAudioVerified" to true, "url" to stream.content,
             "headers" to emptyMap<String, String>(), "mimeType" to stream.format?.mimeType,
             "codec" to stream.codec, "expiresAt" to expires)
     }

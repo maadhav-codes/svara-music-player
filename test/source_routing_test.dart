@@ -22,6 +22,8 @@ void main() {
     messenger.setMockMethodCallHandler(
       channel,
       (_) async => {
+        'studioAudioVerified': true,
+        'mimeType': 'audio/mp4',
         'track': {
           'videoId': 'aaaaaaaaaaa',
           'title': 'Test',
